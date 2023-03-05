@@ -130,10 +130,13 @@
   </ItemDefinitionGroup>
   <ItemGroup>
     <ClCompile Include="src\base.c" />
+    <ClCompile Include="src\lexer.c" />
     <ClCompile Include="src\main.c" />
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="src\base.h" />
+    <ClInclude Include="src\lexer.h" />
+    <ClInclude Include="src\types.h" />
   </ItemGroup>
   <ItemGroup>
     <None Include="examples\test.pork" />

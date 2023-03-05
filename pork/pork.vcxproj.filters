@@ -21,9 +21,18 @@
     <ClCompile Include="src\base.c">
       <Filter>Source Files</Filter>
     </ClCompile>
+    <ClCompile Include="src\lexer.c">
+      <Filter>Source Files</Filter>
+    </ClCompile>
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="src\base.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="src\types.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="src\lexer.h">
       <Filter>Header Files</Filter>
     </ClInclude>
   </ItemGroup>

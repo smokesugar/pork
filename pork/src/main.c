@@ -1,6 +1,7 @@
 #include <stdio.h>
 
 #include "base.h"
+#include "lexer.h"
 
 static Arena* scratch_arenas[2];
 
@@ -50,7 +51,17 @@ int main() {
     size_t source_length = fread(source, 1, file_length, file);
     source[source_length] = '\0';
 
-    printf("%s\n", source);
+    Lexer lexer = init_lexer(source);
+
+    for(;;) {
+        Token token = get_token(&lexer);
+
+        printf("%d: %d -> '%.*s'\n", token.line, token.kind, token.length, token.memory);
+
+        if (token.kind == TOKEN_EOF) {
+            break;
+        }
+    }
 
     return 0;
 }
