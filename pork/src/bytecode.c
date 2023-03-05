@@ -16,7 +16,7 @@ internal i64 get_reg(Bytecode* bytecode) {
 }
 
 internal i64 translate(Bytecode* bytecode, ASTNode* node) {
-    static_assert(NUM_AST_KINDS == 6, "not all ast kinds handled");
+    static_assert(NUM_AST_KINDS == 8, "not all ast kinds handled");
     switch (node->kind)
     {
         default:
@@ -61,14 +61,23 @@ internal i64 translate(Bytecode* bytecode, ASTNode* node) {
             emit(bytecode, op, result, left, right);
             return result;
         }
+
+        case AST_BLOCK:
+            for (ASTNode* statement = node->first; statement; statement = statement->next) {
+                translate(bytecode, statement);
+            }
+            return -1;
+            
+        case AST_RETURN: {
+            i64 result = translate(bytecode, node->expression);
+            emit(bytecode, OP_RET, result, 0, 0);
+            return -1;
+        }
     }
 }
 
 Bytecode* generate_bytecode(Arena* arena, ASTNode* ast) {
     Bytecode* bytecode = arena_push_type(arena, Bytecode);
-
-    i64 result = translate(bytecode, ast);
-    emit(bytecode, OP_RET, result, 0, 0); 
-
+    translate(bytecode, ast);
     return bytecode;
 }

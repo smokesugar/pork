@@ -17,6 +17,20 @@ internal ASTNode* new_node(Parser* parser, ASTKind kind, Token token) {
     return node;
 }
 
+internal bool match(Parser* parser, int kind, char* description) {
+    Token token = peek_token(parser->lexer);
+
+    if (token.kind == kind) {
+        get_token(parser->lexer);
+        return true;
+    }
+
+    error_at_token(parser->source, token, "expected %s", description);
+    return false;
+}
+
+#define CONSUME(kind, description) if (!match(parser, kind, description)) { return 0; }
+
 internal ASTNode* parse_primary(Parser* parser)
 {
     Token token = peek_token(parser->lexer);
@@ -87,6 +101,58 @@ internal ASTNode* parse_expression(Parser* parser) {
     return parse_binary(parser, 0);
 }
 
+internal ASTNode* parse_statement(Parser* parser);
+
+internal ASTNode* parse_block(Parser* parser) {
+    Token lbrace_token = peek_token(parser->lexer);
+    CONSUME('{', "{");
+
+    ASTNode head = {0};
+    ASTNode* cur = &head;
+
+    while (peek_token(parser->lexer).kind != '}' && peek_token(parser->lexer).kind != TOKEN_EOF) {
+        ASTNode* statement = parse_statement(parser);
+        if (!statement) return 0;
+
+        cur->next = statement;
+        while (cur->next) {
+            cur = cur->next;
+        }
+    }
+
+    CONSUME('}', "}");
+    ASTNode* block = new_node(parser, AST_BLOCK, lbrace_token);
+    block->first = head.next;
+
+    return block;
+}
+
+internal ASTNode* parse_statement(Parser* parser) {
+    Token token = peek_token(parser->lexer);
+
+    switch (token.kind) {
+        default: {
+            ASTNode* expression = parse_expression(parser);
+            if (!expression) return 0;
+            CONSUME(';', ";");
+            return expression;
+        } 
+
+        case '{':
+            return parse_block(parser);
+
+        case TOKEN_RETURN: {
+            get_token(parser->lexer);
+            ASTNode* expression = parse_expression(parser);
+            if (!expression) return 0;
+            CONSUME(';', ";");
+            ASTNode* ret = new_node(parser, AST_RETURN, token);
+            ret->expression = expression;
+            return ret;
+        }
+    }
+}
+
 ASTNode* parse(Arena* arena, char* source) {
     Lexer lexer = init_lexer(source);
 
@@ -96,5 +162,5 @@ ASTNode* parse(Arena* arena, char* source) {
         .lexer = &lexer
     };
 
-    return parse_expression(&parser);
+    return parse_block(&parser);
 }

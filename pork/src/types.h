@@ -4,7 +4,11 @@
 
 enum {
     TOKEN_EOF = 0,
+
     TOKEN_INT_LITERAL = 256,
+    TOKEN_IDENTIFIER,
+
+    TOKEN_RETURN
 };
 
 typedef struct {
@@ -24,12 +28,16 @@ typedef enum {
     AST_MUL,
     AST_DIV,
 
+    AST_BLOCK,
+    AST_RETURN,
+
     NUM_AST_KINDS,
 } ASTKind;
 
 typedef struct ASTNode ASTNode;
 struct ASTNode {
     ASTKind kind;
+    ASTNode* next;
     Token token;
 
     union {
@@ -38,6 +46,8 @@ struct ASTNode {
             ASTNode* left;           
             ASTNode* right;
         };
+        ASTNode* first;
+        ASTNode* expression;
     };
 };
 
