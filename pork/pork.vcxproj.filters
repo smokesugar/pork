@@ -30,6 +30,9 @@
     <ClCompile Include="src\bytecode.c">
       <Filter>Source Files</Filter>
     </ClCompile>
+    <ClCompile Include="src\error.c">
+      <Filter>Source Files</Filter>
+    </ClCompile>
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="src\base.h">
@@ -45,6 +48,9 @@
       <Filter>Header Files</Filter>
     </ClInclude>
     <ClInclude Include="src\bytecode.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="src\error.h">
       <Filter>Header Files</Filter>
     </ClInclude>
   </ItemGroup>

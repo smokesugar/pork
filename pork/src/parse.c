@@ -2,8 +2,10 @@
 
 #include "parse.h"
 #include "lexer.h"
+#include "error.h"
 
 typedef struct {
+    char* source;
     Arena* arena;
     Lexer* lexer;
 } Parser; 
@@ -28,7 +30,7 @@ internal ASTNode* parse_primary(Parser* parser)
         }
     }
 
-    assert(false);
+    error_at_token(parser->source, token, "expected an expression");
     return 0;
 }
 
@@ -89,6 +91,7 @@ ASTNode* parse(Arena* arena, char* source) {
     Lexer lexer = init_lexer(source);
 
     Parser parser = {
+        .source = source,
         .arena = arena,
         .lexer = &lexer
     };
