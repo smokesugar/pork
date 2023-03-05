@@ -8,7 +8,8 @@ enum {
     TOKEN_INT_LITERAL = 256,
     TOKEN_IDENTIFIER,
 
-    TOKEN_RETURN
+    TOKEN_RETURN,
+    TOKEN_LET
 };
 
 typedef struct {
@@ -22,17 +23,28 @@ typedef enum {
     AST_UNINITIALIZED,
 
     AST_INT_LITERAL,
+    AST_VARIABLE,
 
     AST_ADD,
     AST_SUB,
     AST_MUL,
     AST_DIV,
 
+    AST_ASSIGN,
+
     AST_BLOCK,
     AST_RETURN,
+    AST_VARIABLE_DECL,
 
     NUM_AST_KINDS,
 } ASTKind;
+
+typedef struct Variable Variable;
+struct Variable {
+    Variable* next;
+    Token name;
+    i64 reg;
+};
 
 typedef struct ASTNode ASTNode;
 struct ASTNode {
@@ -48,6 +60,8 @@ struct ASTNode {
         };
         ASTNode* first;
         ASTNode* expression;
+        Token name;
+        Variable* variable;
     };
 };
 
@@ -57,6 +71,7 @@ typedef enum {
     OP_INVALID,
 
     OP_IMM,
+    OP_COPY,
 
     OP_ADD,
     OP_SUB,

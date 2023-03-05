@@ -5,7 +5,6 @@
 
 Lexer init_lexer(char* source) {
     return (Lexer) {
-        .source = source,
         .pointer = source,
         .line = 1
     };
@@ -29,6 +28,8 @@ internal int identifier_kind(char* start, char* pointer) {
     switch(start[0]) {
         case 'r':
             return check_keyword(start, pointer, "return", TOKEN_RETURN);
+        case 'l':
+            return check_keyword(start, pointer, "let", TOKEN_LET);
     }
     
     return TOKEN_IDENTIFIER;
@@ -87,4 +88,10 @@ Token peek_token(Lexer* lexer) {
     }
 
     return lexer->cache;
+}
+
+void jump_to_token(Lexer* lexer, Token token) {
+    lexer->cache.memory = 0;
+    lexer->pointer = token.memory;
+    lexer->line = token.line;
 }

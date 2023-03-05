@@ -16,7 +16,7 @@ internal i64 get_reg(Bytecode* bytecode) {
 }
 
 internal i64 translate(Bytecode* bytecode, ASTNode* node) {
-    static_assert(NUM_AST_KINDS == 8, "not all ast kinds handled");
+    static_assert(NUM_AST_KINDS == 11, "not all ast kinds handled");
     switch (node->kind)
     {
         default:
@@ -27,6 +27,10 @@ internal i64 translate(Bytecode* bytecode, ASTNode* node) {
             i64 result = get_reg(bytecode);
             emit(bytecode, OP_IMM, result, node->int_literal, 0);
             return result;
+        }
+
+        case AST_VARIABLE: {
+            return node->variable->reg;
         }
 
         case AST_ADD:
@@ -62,6 +66,12 @@ internal i64 translate(Bytecode* bytecode, ASTNode* node) {
             return result;
         }
 
+        case AST_ASSIGN: {
+            i64 result = translate(bytecode, node->right);
+            emit(bytecode, OP_COPY, node->left->variable->reg, result, 0);
+            return result;
+        }
+
         case AST_BLOCK:
             for (ASTNode* statement = node->first; statement; statement = statement->next) {
                 translate(bytecode, statement);
@@ -71,6 +81,11 @@ internal i64 translate(Bytecode* bytecode, ASTNode* node) {
         case AST_RETURN: {
             i64 result = translate(bytecode, node->expression);
             emit(bytecode, OP_RET, result, 0, 0);
+            return -1;
+        }
+
+        case AST_VARIABLE_DECL: {
+            node->variable->reg = get_reg(bytecode);
             return -1;
         }
     }

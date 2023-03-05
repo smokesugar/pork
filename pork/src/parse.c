@@ -42,6 +42,13 @@ internal ASTNode* parse_primary(Parser* parser)
             node->int_literal = strtoull(token.memory, 0, 10);
             return node;
         }
+
+        case TOKEN_IDENTIFIER: {
+            get_token(parser->lexer);
+            ASTNode* node = new_node(parser, AST_VARIABLE, token);
+            node->name = token;
+            return node;
+        }
     }
 
     error_at_token(parser->source, token, "expected an expression");
@@ -97,8 +104,28 @@ internal ASTNode* parse_binary(Parser* parser, int caller_precedence) {
     return left;
 }
 
+internal ASTNode* parse_assign(Parser* parser) {
+    ASTNode* left = parse_binary(parser, 0);
+    if (!left) return 0;
+
+    if (peek_token(parser->lexer).kind == '=') {
+        Token equal_token = get_token(parser->lexer);
+
+        ASTNode* right = parse_assign(parser);
+        if (!right) return 0;
+
+        ASTNode* assign = new_node(parser, AST_ASSIGN, equal_token);
+        assign->left = left;
+        assign->right = right;
+
+        left = assign;
+    }
+
+    return left;
+}
+
 internal ASTNode* parse_expression(Parser* parser) {
-    return parse_binary(parser, 0);
+    return parse_assign(parser);
 }
 
 internal ASTNode* parse_statement(Parser* parser);
@@ -150,6 +177,137 @@ internal ASTNode* parse_statement(Parser* parser) {
             ret->expression = expression;
             return ret;
         }
+
+        case TOKEN_LET: {
+            get_token(parser->lexer);
+            Token name = peek_token(parser->lexer);
+            CONSUME(TOKEN_IDENTIFIER, "an identifier");
+
+            ASTNode* assign = 0;
+            if (peek_token(parser->lexer).kind == '=') {
+                jump_to_token(parser->lexer, name);
+                assign = parse_assign(parser);
+                if (!assign) return 0;
+            }
+
+            CONSUME(';', ";");
+            
+            ASTNode* decl = new_node(parser, AST_VARIABLE_DECL, token);
+            decl->name = name;
+            decl->next = assign;
+            return decl;
+        };
+    }
+}
+
+typedef struct Scope Scope;
+struct Scope {
+    Scope* parent;
+    Variable* variables;
+};
+
+internal Variable* find_variable(Scope* scope, Token name) {
+    for (Variable* v = scope->variables; v; v = v->next) {
+        if (v->name.length == name.length && memcmp(v->name.memory, name.memory, name.length) == 0) {
+            return v;
+        }
+    }
+
+    if (scope->parent) {
+        return find_variable(scope->parent, name);
+    }
+
+    return 0;
+}
+
+internal bool process_ast(Parser* parser, Scope* scope, ASTNode* node) {
+    static_assert(NUM_AST_KINDS == 11, "not all ast kinds handled");
+    switch (node->kind) {
+        default:
+            assert(false);
+            return false;
+
+        case AST_INT_LITERAL:
+            return true;
+
+        case AST_VARIABLE: {
+            Variable* variable = find_variable(scope, node->name);
+
+            if (!variable) {
+                error_at_token(parser->source, node->token, "undefined variable");
+                return false;
+            }
+
+            node->variable = variable;
+            return true;
+        }
+
+        case AST_ADD:
+        case AST_SUB:
+        case AST_MUL:
+        case AST_DIV:
+        {
+            bool success = true;
+
+            success &= process_ast(parser, scope, node->left);
+            success &= process_ast(parser, scope, node->right);
+
+            return success;
+        }
+
+        case AST_ASSIGN:
+        {
+            bool success = true;
+
+            success &= process_ast(parser, scope, node->left);
+            success &= process_ast(parser, scope, node->right);
+
+            if (success) {
+                if (node->left->kind != AST_VARIABLE) {
+                    error_at_token(parser->source, node->left->token, "not assignable");
+                    success = false;
+                }
+            }
+
+            return success;
+        }
+
+        case AST_BLOCK: {
+            bool success = true; 
+
+            Scope inner_scope = {
+                .parent = scope,
+            };
+
+            for (ASTNode* child = node->first; child; child = child->next) {
+                success &= process_ast(parser, &inner_scope, child);
+            }
+
+            return success;
+        }
+
+        case AST_RETURN:
+            return process_ast(parser, scope, node->expression);
+
+        case AST_VARIABLE_DECL: {
+            if (find_variable(scope, node->name)) {
+                error_at_token(parser->source, node->name, "variable redefinition");
+                return false;
+            }
+
+            Variable* variable = arena_push_type(parser->arena, Variable);
+            variable->name = node->name;
+
+            Variable** bucket = &scope->variables;
+            while (*bucket) {
+                bucket = &(*bucket)->next;
+            }
+            *bucket = variable;
+
+            node->variable = variable;
+
+            return true;
+        }
     }
 }
 
@@ -162,5 +320,11 @@ ASTNode* parse(Arena* arena, char* source) {
         .lexer = &lexer
     };
 
-    return parse_block(&parser);
+    ASTNode* ast = parse_block(&parser);
+
+    if (ast) {
+        return process_ast(&parser, 0, ast) ? ast : 0;
+    }
+
+    return 0;
 }

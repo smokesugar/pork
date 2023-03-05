@@ -81,7 +81,7 @@ int main() {
     {
         Instruction* ins = bytecode->instructions + i;
 
-        static_assert(NUM_OPS == 7, "not all ops handled");
+        static_assert(NUM_OPS == 8, "not all ops handled");
         switch (ins->op) {
             default:
                 assert(false);
@@ -89,6 +89,9 @@ int main() {
 
             case OP_IMM:
                 regs[ins->a1] = ins->a2;
+                break;
+            case OP_COPY:
+                regs[ins->a1] = regs[ins->a2];
                 break;
 
             case OP_ADD:

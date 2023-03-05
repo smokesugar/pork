@@ -1,4 +1,6 @@
 {
-    20 * 21;
-    return 15 * 5 - 15 + 45 / 15 * 3;
+    let bruh;
+    let chungus = bruh = 20;
+    chungus = chungus + 1;
+    return bruh * chungus;
 }
