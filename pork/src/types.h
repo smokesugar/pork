@@ -13,3 +13,28 @@ typedef struct {
     int length;
     int line;
 } Token;
+
+typedef enum {
+    AST_UNINITIALIZED,
+
+    AST_INT_LITERAL,
+
+    AST_ADD,
+    AST_SUB,
+    AST_MUL,
+    AST_DIV,
+} ASTKind;
+
+typedef struct ASTNode ASTNode;
+struct ASTNode {
+    ASTKind kind;
+    Token token;
+
+    union {
+        u64 int_literal;
+        struct {
+            ASTNode* left;           
+            ASTNode* right;
+        };
+    };
+};

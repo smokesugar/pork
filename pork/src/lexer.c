@@ -4,6 +4,7 @@
 
 Lexer init_lexer(char* source) {
     return (Lexer) {
+        .source = source,
         .pointer = source,
         .line = 1
     };

@@ -24,6 +24,9 @@
     <ClCompile Include="src\lexer.c">
       <Filter>Source Files</Filter>
     </ClCompile>
+    <ClCompile Include="src\parse.c">
+      <Filter>Source Files</Filter>
+    </ClCompile>
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="src\base.h">
@@ -33,6 +36,9 @@
       <Filter>Header Files</Filter>
     </ClInclude>
     <ClInclude Include="src\lexer.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="src\parse.h">
       <Filter>Header Files</Filter>
     </ClInclude>
   </ItemGroup>

@@ -1,7 +1,7 @@
 #include <stdio.h>
 
 #include "base.h"
-#include "lexer.h"
+#include "parse.h"
 
 static Arena* scratch_arenas[2];
 
@@ -28,6 +28,24 @@ void release_scratch(Scratch* scratch) {
     scratch->arena->allocated = scratch->allocated;
 }
 
+internal i64 eval(ASTNode* node) {
+    switch (node->kind) {
+        default:
+            assert(false);
+            return 0;
+        case AST_INT_LITERAL:
+            return node->int_literal;
+        case AST_ADD:
+            return eval(node->left) + eval(node->right);
+        case AST_SUB:
+            return eval(node->left) - eval(node->right);
+        case AST_MUL:
+            return eval(node->left) * eval(node->right);
+        case AST_DIV:
+            return eval(node->left) / eval(node->right);
+    }
+}
+
 int main() {
     for (int i = 0; i < LENGTH(scratch_arenas); ++i) {
         scratch_arenas[i] = new_arena(5 * 1024 * 1024);
@@ -51,17 +69,10 @@ int main() {
     size_t source_length = fread(source, 1, file_length, file);
     source[source_length] = '\0';
 
-    Lexer lexer = init_lexer(source);
+    ASTNode* ast = parse(arena, source);
+    if (!ast) return 1;
 
-    for(;;) {
-        Token token = get_token(&lexer);
-
-        printf("%d: %d -> '%.*s'\n", token.line, token.kind, token.length, token.memory);
-
-        if (token.kind == TOKEN_EOF) {
-            break;
-        }
-    }
+    printf("%lld\n", eval(ast));
 
     return 0;
 }

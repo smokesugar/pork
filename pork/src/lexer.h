@@ -3,6 +3,7 @@
 #include "types.h"
 
 typedef struct {
+    char* source;
     char* pointer;
     int line;
     Token cache;

@@ -105,6 +105,7 @@
       <PreprocessorDefinitions>_DEBUG;_CONSOLE;%(PreprocessorDefinitions)</PreprocessorDefinitions>
       <ConformanceMode>true</ConformanceMode>
       <TreatWarningAsError>true</TreatWarningAsError>
+      <AdditionalOptions>-wd4201 %(AdditionalOptions)</AdditionalOptions>
     </ClCompile>
     <Link>
       <SubSystem>Console</SubSystem>
@@ -120,6 +121,7 @@
       <PreprocessorDefinitions>NDEBUG;_CONSOLE;%(PreprocessorDefinitions)</PreprocessorDefinitions>
       <ConformanceMode>true</ConformanceMode>
       <TreatWarningAsError>true</TreatWarningAsError>
+      <AdditionalOptions>-wd4201 %(AdditionalOptions)</AdditionalOptions>
     </ClCompile>
     <Link>
       <SubSystem>Console</SubSystem>
@@ -132,10 +134,12 @@
     <ClCompile Include="src\base.c" />
     <ClCompile Include="src\lexer.c" />
     <ClCompile Include="src\main.c" />
+    <ClCompile Include="src\parse.c" />
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="src\base.h" />
     <ClInclude Include="src\lexer.h" />
+    <ClInclude Include="src\parse.h" />
     <ClInclude Include="src\types.h" />
   </ItemGroup>
   <ItemGroup>
