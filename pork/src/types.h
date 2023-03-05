@@ -23,6 +23,8 @@ typedef enum {
     AST_SUB,
     AST_MUL,
     AST_DIV,
+
+    NUM_AST_KINDS,
 } ASTKind;
 
 typedef struct ASTNode ASTNode;
@@ -38,3 +40,33 @@ struct ASTNode {
         };
     };
 };
+
+#define MAX_INSTRUCTION_COUNT (1 << 13)
+
+typedef enum {
+    OP_INVALID,
+
+    OP_IMM,
+
+    OP_ADD,
+    OP_SUB,
+    OP_MUL,
+    OP_DIV,
+
+    OP_RET,
+
+    NUM_OPS
+} Op;
+
+typedef struct {
+    Op op;
+    i64 a1;
+    i64 a2;
+    i64 a3;
+} Instruction;
+
+typedef struct {
+    int length;
+    Instruction instructions[MAX_INSTRUCTION_COUNT];
+    i64 register_count;
+} Bytecode;

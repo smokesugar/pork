@@ -132,12 +132,14 @@
   </ItemDefinitionGroup>
   <ItemGroup>
     <ClCompile Include="src\base.c" />
+    <ClCompile Include="src\bytecode.c" />
     <ClCompile Include="src\lexer.c" />
     <ClCompile Include="src\main.c" />
     <ClCompile Include="src\parse.c" />
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="src\base.h" />
+    <ClInclude Include="src\bytecode.h" />
     <ClInclude Include="src\lexer.h" />
     <ClInclude Include="src\parse.h" />
     <ClInclude Include="src\types.h" />

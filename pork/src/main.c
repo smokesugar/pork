@@ -2,6 +2,7 @@
 
 #include "base.h"
 #include "parse.h"
+#include "bytecode.h"
 
 static Arena* scratch_arenas[2];
 
@@ -72,7 +73,43 @@ int main() {
     ASTNode* ast = parse(arena, source);
     if (!ast) return 1;
 
-    printf("%lld\n", eval(ast));
+    Bytecode* bytecode = generate_bytecode(arena, ast);
 
-    return 0;
+    i64 regs[1024] = {0};
+
+    for (int i = 0; i < bytecode->length; ++i)
+    {
+        Instruction* ins = bytecode->instructions + i;
+
+        static_assert(NUM_OPS == 7, "not all ops handled");
+        switch (ins->op) {
+            default:
+                assert(false);
+                break;
+
+            case OP_IMM:
+                regs[ins->a1] = ins->a2;
+                break;
+
+            case OP_ADD:
+                regs[ins->a1] = regs[ins->a2] + regs[ins->a3];
+                break;
+            case OP_SUB:
+                regs[ins->a1] = regs[ins->a2] - regs[ins->a3];
+                break;
+            case OP_MUL:
+                regs[ins->a1] = regs[ins->a2] * regs[ins->a3];
+                break;
+            case OP_DIV:
+                regs[ins->a1] = regs[ins->a2] / regs[ins->a3];
+                break;
+
+            case OP_RET:
+                printf("Returned with %lld.\n", regs[ins->a1]);
+                return 0;
+        }
+    }
+
+    printf("No return.\n");
+    return 1;
 }

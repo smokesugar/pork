@@ -27,6 +27,9 @@
     <ClCompile Include="src\parse.c">
       <Filter>Source Files</Filter>
     </ClCompile>
+    <ClCompile Include="src\bytecode.c">
+      <Filter>Source Files</Filter>
+    </ClCompile>
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="src\base.h">
@@ -39,6 +42,9 @@
       <Filter>Header Files</Filter>
     </ClInclude>
     <ClInclude Include="src\parse.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="src\bytecode.h">
       <Filter>Header Files</Filter>
     </ClInclude>
   </ItemGroup>
