@@ -322,9 +322,6 @@ BasicBlock* analyze_control_flow(Arena* arena, char* source, Bytecode* bytecode)
                     block->successors[1] = labelled_blocks[ins->a3];
                     ++block->successor_count;
                 }
-                else {
-                    printf("Successors both same.\n");
-                }
                 break;
         }
     }
