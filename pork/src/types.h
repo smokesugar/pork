@@ -132,6 +132,7 @@ typedef struct {
 
 typedef struct BasicBlock BasicBlock;
 struct BasicBlock {
+    int index;
     BasicBlock* next;
     bool has_user_code;
     bool reachable;
@@ -142,4 +143,7 @@ struct BasicBlock {
 
     int successor_count;
     BasicBlock* successors[2];
+
+    int predecessor_count;
+    BasicBlock** predecessors;
 };

@@ -266,12 +266,14 @@ BasicBlock* analyze_control_flow(Arena* arena, char* source, Bytecode* bytecode)
     BasicBlock* labelled_blocks[MAX_LABELS] = {0};
     labelled_blocks[bytecode->label_count-1] = &end_block;
 
+    int index_counter = 1;
     for (int i = 0; i < bytecode->length; ++i) {
         Instruction* ins = bytecode->instructions + i;
 
         if (ins->label != -1 || start_new_block) {
             start_new_block = false;
             current = current->next = new_basic_block(arena, i);
+            current->index = index_counter++;
 
             if (ins->label != -1) {
                 labelled_blocks[ins->label] = current;
@@ -346,8 +348,27 @@ BasicBlock* analyze_control_flow(Arena* arena, char* source, Bytecode* bytecode)
             if (block->successors[i] == &end_block) {
                 block->successors[i] = block->successors[--block->successor_count];
             }
+            else {
+                ++block->successors[i]->predecessor_count;
+            }
         }
     }
 
-    return success ? root : 0;
+    if (!success) {
+        return 0;
+    }
+
+    for (BasicBlock* block = root; block; block = block->next) {
+        block->predecessors = arena_push_array(arena, BasicBlock*, block->predecessor_count);
+        block->predecessor_count = 0;
+    }
+
+    for (BasicBlock* block = root; block; block = block->next) {
+        for (int i = 0; i < block->successor_count; ++i) {
+            BasicBlock* successor = block->successors[i];
+            successor->predecessors[successor->predecessor_count++] = block;
+        }
+    }
+
+    return root;
 }
