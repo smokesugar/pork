@@ -14,7 +14,9 @@ enum {
     TOKEN_BANG_EQUAL,
 
     TOKEN_RETURN,
-    TOKEN_LET
+    TOKEN_LET,
+    TOKEN_IF,
+    TOKEN_ELSE,
 };
 
 typedef struct {
@@ -45,6 +47,7 @@ typedef enum {
     AST_BLOCK,
     AST_RETURN,
     AST_VARIABLE_DECL,
+    AST_IF,
 
     NUM_AST_KINDS,
 } ASTKind;
@@ -72,6 +75,11 @@ struct ASTNode {
         ASTNode* expression;
         Token name;
         Variable* variable;
+        struct {
+            ASTNode* condition;
+            ASTNode* block_then;
+            ASTNode* block_else;
+        } conditional;
     };
 };
 
@@ -94,6 +102,8 @@ typedef enum {
     OP_NEQUAL,
 
     OP_RET,
+    OP_JMP,
+    OP_CJMP,
 
     NUM_OPS
 } Op;

@@ -77,11 +77,11 @@ int main() {
 
     i64 regs[1024] = {0};
 
-    for (int i = 0; i < bytecode->length; ++i)
+    for (int i = 0; i < bytecode->length;)
     {
         Instruction* ins = bytecode->instructions + i;
 
-        static_assert(NUM_OPS == 12, "not all ops handled");
+        static_assert(NUM_OPS == 14, "not all ops handled");
         switch (ins->op) {
             default:
                 assert(false);
@@ -122,7 +122,17 @@ int main() {
             case OP_RET:
                 printf("Returned with %lld.\n", regs[ins->a1]);
                 return 0;
+
+            case OP_JMP:
+                i = (int)ins->a1;
+                continue;
+
+            case OP_CJMP:
+                i = (int)(regs[ins->a1] ? ins->a2 : ins->a3);
+                continue;
         }
+
+        ++i;
     }
 
     printf("No return.\n");

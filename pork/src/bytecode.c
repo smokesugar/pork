@@ -1,22 +1,40 @@
 #include "bytecode.h"
 
-internal void emit(Bytecode* bytecode, Op op, i64 a1, i64 a2, i64 a3) {
-    assert(bytecode->length < MAX_INSTRUCTION_COUNT);
+#define MAX_LABELS 1024
+
+typedef struct {
+    Bytecode* bytecode;
+    int label_count;
+    int label_locations[MAX_LABELS];
+} Translator;
+
+internal void emit(Translator* translator, Op op, i64 a1, i64 a2, i64 a3) {
+    assert(translator->bytecode->length < MAX_INSTRUCTION_COUNT);
     assert(op);
 
-    Instruction* ins = bytecode->instructions + (bytecode->length++);
+    Instruction* ins = translator->bytecode->instructions + (translator->bytecode->length++);
     ins->op = op;
     ins->a1 = a1;
     ins->a2 = a2;
     ins->a3 = a3;
 }
 
-internal i64 get_reg(Bytecode* bytecode) {
-    return bytecode->register_count++;
+internal i64 get_reg(Translator* translator) {
+    return translator->bytecode->register_count++;
 }
 
-internal i64 translate(Bytecode* bytecode, ASTNode* node) {
-    static_assert(NUM_AST_KINDS == 15, "not all ast kinds handled");
+internal int get_label(Translator* translator) {
+    assert(translator->label_count < MAX_LABELS);
+    return translator->label_count++;
+}
+
+internal void place_label(Translator* translator, int label) {
+    assert(label < translator->label_count);
+    translator->label_locations[label] = translator->bytecode->length;
+}
+
+internal i64 translate(Translator* translator, ASTNode* node) {
+    static_assert(NUM_AST_KINDS == 16, "not all ast kinds handled");
     switch (node->kind)
     {
         default:
@@ -24,8 +42,8 @@ internal i64 translate(Bytecode* bytecode, ASTNode* node) {
             return 0;
 
         case AST_INT_LITERAL: {
-            i64 result = get_reg(bytecode);
-            emit(bytecode, OP_IMM, result, node->int_literal, 0);
+            i64 result = get_reg(translator);
+            emit(translator, OP_IMM, result, node->int_literal, 0);
             return result;
         }
 
@@ -42,9 +60,9 @@ internal i64 translate(Bytecode* bytecode, ASTNode* node) {
         case AST_EQUAL:
         case AST_NEQUAL:
         {
-            i64 left = translate(bytecode, node->left);
-            i64 right = translate(bytecode, node->right);
-            i64 result = get_reg(bytecode);
+            i64 left = translate(translator, node->left);
+            i64 right = translate(translator, node->right);
+            i64 result = get_reg(translator);
 
             Op op = 0;
 
@@ -78,30 +96,58 @@ internal i64 translate(Bytecode* bytecode, ASTNode* node) {
                     break;
             }
 
-            emit(bytecode, op, result, left, right);
+            emit(translator, op, result, left, right);
             return result;
         }
 
         case AST_ASSIGN: {
-            i64 result = translate(bytecode, node->right);
-            emit(bytecode, OP_COPY, node->left->variable->reg, result, 0);
+            i64 result = translate(translator, node->right);
+            emit(translator, OP_COPY, node->left->variable->reg, result, 0);
             return result;
         }
 
         case AST_BLOCK:
             for (ASTNode* statement = node->first; statement; statement = statement->next) {
-                translate(bytecode, statement);
+                translate(translator, statement);
             }
             return -1;
             
         case AST_RETURN: {
-            i64 result = translate(bytecode, node->expression);
-            emit(bytecode, OP_RET, result, 0, 0);
+            i64 result = translate(translator, node->expression);
+            emit(translator, OP_RET, result, 0, 0);
             return -1;
         }
 
         case AST_VARIABLE_DECL: {
-            node->variable->reg = get_reg(bytecode);
+            node->variable->reg = get_reg(translator);
+            return -1;
+        }
+
+        case AST_IF: {
+            bool has_else = node->conditional.block_else != 0;
+
+            int label_then = get_label(translator);
+            int label_else = get_label(translator);
+            int label_end = 0;
+
+            i64 condition = translate(translator, node->conditional.condition);
+            emit(translator, OP_CJMP, condition, label_then, label_else);
+
+            place_label(translator, label_then);
+            translate(translator, node->conditional.block_then);
+
+            if (has_else) {
+                label_end = get_label(translator);
+                emit(translator, OP_JMP, label_end, 0, 0);
+            }
+
+            place_label(translator, label_else);
+
+            if (has_else) {
+                translate(translator, node->conditional.block_else);
+                place_label(translator, label_end);
+            }
+
             return -1;
         }
     }
@@ -109,6 +155,26 @@ internal i64 translate(Bytecode* bytecode, ASTNode* node) {
 
 Bytecode* generate_bytecode(Arena* arena, ASTNode* ast) {
     Bytecode* bytecode = arena_push_type(arena, Bytecode);
-    translate(bytecode, ast);
+
+    Translator translator = {
+        .bytecode = bytecode
+    };
+
+    translate(&translator, ast);
+
+    for (int i = 0; i < bytecode->length; ++i) {
+        Instruction* ins = bytecode->instructions + i;
+        
+        switch (ins->op) {
+            case OP_JMP:
+                ins->a1 = translator.label_locations[ins->a1];
+                break;
+            case OP_CJMP:
+                ins->a2 = translator.label_locations[ins->a2];
+                ins->a3 = translator.label_locations[ins->a3];
+                break;
+        }
+    }
+
     return bytecode;
 }
