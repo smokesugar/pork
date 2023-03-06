@@ -5,6 +5,10 @@
         bruh = bruh + 1;
     }
 
-    let bruh2 = bruh + 1;
-    return bruh * bruh2;
+    if 1 {
+        let bruh2 = bruh + 1;
+        return bruh * bruh2;
+    }
+
+    return 3;
 }

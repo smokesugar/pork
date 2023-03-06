@@ -39,3 +39,27 @@ void error_at_token(char* source, Token token, char* format, ...) {
 
     printf("\n");
 }
+
+void error_on_line(char* source, int line, char* format, ...) {
+    char* line_memory = source;
+    for (int i = 1; i < line; ++i) {
+        while (*line_memory != '\n' && *line_memory != '\0') {
+            ++line_memory;
+        }
+        assert(*line_memory == '\n' && "line out of bounds");
+        ++line_memory;
+    }
+
+    while (isspace(*line_memory)) {
+        ++line_memory;
+    }
+
+    printf("Line %d: ", line);
+
+    va_list argument_list;
+    va_start(argument_list, format);
+    vprintf(format, argument_list);
+    va_end(argument_list);
+
+    printf(": '%.*s'\n", find_line_length(line_memory), line_memory);
+}

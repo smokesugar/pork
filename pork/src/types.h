@@ -117,11 +117,29 @@ typedef struct {
     i64 a2;
     i64 a3;
     int label;
+    int line;
 } Instruction;
 
 typedef struct {
     int length;
     Instruction instructions[MAX_INSTRUCTION_COUNT];
+
+    int label_count;
     int label_locations[MAX_LABEL_COUNT];
+
     i64 register_count;
 } Bytecode;
+
+typedef struct BasicBlock BasicBlock;
+struct BasicBlock {
+    BasicBlock* next;
+    bool has_user_code;
+    bool reachable;
+    int first_line;
+
+    int start;
+    int end;
+
+    int successor_count;
+    BasicBlock** successors;
+};

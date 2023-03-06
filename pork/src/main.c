@@ -74,6 +74,8 @@ int main() {
     if (!ast) return 1;
 
     Bytecode* bytecode = generate_bytecode(arena, ast);
+    BasicBlock* cfg = analyze_control_flow(arena, source, bytecode);
+    if (!cfg) return 1;
 
     i64 regs[1024] = {0};
 
