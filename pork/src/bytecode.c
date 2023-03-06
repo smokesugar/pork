@@ -34,7 +34,7 @@ internal void place_label(Translator* translator, int label) {
 }
 
 internal i64 translate(Translator* translator, ASTNode* node) {
-    static_assert(NUM_AST_KINDS == 16, "not all ast kinds handled");
+    static_assert(NUM_AST_KINDS == 17, "not all ast kinds handled");
     switch (node->kind)
     {
         default:
@@ -147,6 +147,24 @@ internal i64 translate(Translator* translator, ASTNode* node) {
                 translate(translator, node->conditional.block_else);
                 place_label(translator, label_end);
             }
+
+            return -1;
+        }
+
+        case AST_WHILE: {
+            int label_start = get_label(translator);
+            int label_body = get_label(translator);
+            int label_end = get_label(translator);
+
+            place_label(translator, label_start);
+            i64 condition = translate(translator, node->conditional.condition);
+            emit(translator, OP_CJMP, condition, label_body, label_end);
+
+            place_label(translator, label_body);
+            translate(translator, node->conditional.block_then);
+            emit(translator, OP_JMP, label_start, 0, 0);
+
+            place_label(translator, label_end);
 
             return -1;
         }

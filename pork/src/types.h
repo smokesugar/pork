@@ -17,6 +17,7 @@ enum {
     TOKEN_LET,
     TOKEN_IF,
     TOKEN_ELSE,
+    TOKEN_WHILE,
 };
 
 typedef struct {
@@ -48,6 +49,7 @@ typedef enum {
     AST_RETURN,
     AST_VARIABLE_DECL,
     AST_IF,
+    AST_WHILE,
 
     NUM_AST_KINDS,
 } ASTKind;

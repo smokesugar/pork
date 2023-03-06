@@ -1,14 +1,11 @@
 {
-    let bruh;
+    let bruh = 0;
 
-    if 0 {
-        bruh = 2;
-        return 5;
-    }
-    else {
-        return 4;
+    while bruh < 20 {
+        bruh = bruh + 1;
     }
 
-    bruh = 1;
-    return bruh;
+    let bruh2 = bruh + 1;
+    
+    return bruh2 * bruh;
 }

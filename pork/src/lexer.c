@@ -34,6 +34,8 @@ internal int identifier_kind(char* start, char* pointer) {
             return check_keyword(start, pointer, "if", TOKEN_IF);
         case 'e':
             return check_keyword(start, pointer, "else", TOKEN_ELSE);
+        case 'w':
+            return check_keyword(start, pointer, "while", TOKEN_WHILE);
     }
     
     return TOKEN_IDENTIFIER;

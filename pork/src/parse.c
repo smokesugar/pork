@@ -244,6 +244,22 @@ internal ASTNode* parse_statement(Parser* parser) {
 
             return if_statement;
         }
+
+        case TOKEN_WHILE: {
+            get_token(parser->lexer);
+
+            ASTNode* condition = parse_expression(parser);
+            if (!condition) return 0;
+
+            ASTNode* body = parse_block(parser);
+            if (!body) return 0;
+
+            ASTNode* while_statement = new_node(parser, AST_WHILE, token);
+            while_statement->conditional.condition = condition;
+            while_statement->conditional.block_then = body;
+
+            return while_statement;
+        }
     }
 }
 
@@ -268,7 +284,7 @@ internal Variable* find_variable(Scope* scope, Token name) {
 }
 
 internal bool process_ast(Parser* parser, Scope* scope, ASTNode* node) {
-    static_assert(NUM_AST_KINDS == 16, "not all ast kinds handled");
+    static_assert(NUM_AST_KINDS == 17, "not all ast kinds handled");
     switch (node->kind) {
         default:
             assert(false);
@@ -360,7 +376,9 @@ internal bool process_ast(Parser* parser, Scope* scope, ASTNode* node) {
             return true;
         }
 
-        case AST_IF: {
+        case AST_IF:
+        case AST_WHILE:
+        {
             bool success = true;
 
             success &= process_ast(parser, scope, node->conditional.condition);
