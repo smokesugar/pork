@@ -1,6 +1,3 @@
 {
-    let bruh;
-    let chungus = bruh = 20;
-    chungus = chungus + 1;
-    return bruh * chungus;
+    return 2 != 1;
 }

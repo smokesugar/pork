@@ -81,7 +81,7 @@ int main() {
     {
         Instruction* ins = bytecode->instructions + i;
 
-        static_assert(NUM_OPS == 8, "not all ops handled");
+        static_assert(NUM_OPS == 12, "not all ops handled");
         switch (ins->op) {
             default:
                 assert(false);
@@ -105,6 +105,18 @@ int main() {
                 break;
             case OP_DIV:
                 regs[ins->a1] = regs[ins->a2] / regs[ins->a3];
+                break;
+            case OP_LESS:
+                regs[ins->a1] = regs[ins->a2] < regs[ins->a3];
+                break;
+            case OP_LEQUAL:
+                regs[ins->a1] = regs[ins->a2] <= regs[ins->a3];
+                break;
+            case OP_EQUAL:
+                regs[ins->a1] = regs[ins->a2] == regs[ins->a3];
+                break;
+            case OP_NEQUAL:
+                regs[ins->a1] = regs[ins->a2] != regs[ins->a3];
                 break;
 
             case OP_RET:

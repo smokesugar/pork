@@ -16,7 +16,7 @@ internal i64 get_reg(Bytecode* bytecode) {
 }
 
 internal i64 translate(Bytecode* bytecode, ASTNode* node) {
-    static_assert(NUM_AST_KINDS == 11, "not all ast kinds handled");
+    static_assert(NUM_AST_KINDS == 15, "not all ast kinds handled");
     switch (node->kind)
     {
         default:
@@ -37,6 +37,10 @@ internal i64 translate(Bytecode* bytecode, ASTNode* node) {
         case AST_SUB:
         case AST_MUL:
         case AST_DIV:
+        case AST_LESS:
+        case AST_LEQUAL:
+        case AST_EQUAL:
+        case AST_NEQUAL:
         {
             i64 left = translate(bytecode, node->left);
             i64 right = translate(bytecode, node->right);
@@ -59,6 +63,18 @@ internal i64 translate(Bytecode* bytecode, ASTNode* node) {
                     break;
                 case AST_DIV:
                     op = OP_DIV;
+                    break;
+                case AST_LESS:
+                    op = OP_LESS;
+                    break;
+                case AST_LEQUAL:
+                    op = OP_LEQUAL;
+                    break;
+                case AST_EQUAL:
+                    op = OP_EQUAL;
+                    break;
+                case AST_NEQUAL:
+                    op = OP_NEQUAL;
                     break;
             }
 

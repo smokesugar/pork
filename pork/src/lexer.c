@@ -35,6 +35,15 @@ internal int identifier_kind(char* start, char* pointer) {
     return TOKEN_IDENTIFIER;
 }
 
+internal bool match(Lexer* lexer, char c) {
+    if (*lexer->pointer == c) {
+        ++lexer->pointer;
+        return true;
+    }
+
+    return false;
+}
+
 Token get_token(Lexer* lexer) {
     if (lexer->cache.memory) {
         Token token = lexer->cache;
@@ -71,6 +80,23 @@ Token get_token(Lexer* lexer) {
 
         case '\0':
             --lexer->pointer;
+            break;
+
+        case '<':
+            if (match(lexer, '='))
+                kind = TOKEN_LESS_EQUAL;
+            break;
+        case '>':
+            if (match(lexer, '='))
+                kind = TOKEN_GREATER_EQUAL;
+            break;
+        case '=':
+            if (match(lexer, '='))
+                kind = TOKEN_EQUAL_EQUAL;
+            break;
+        case '!':
+            if (match(lexer, '='))
+                kind = TOKEN_BANG_EQUAL;
             break;
     }
 

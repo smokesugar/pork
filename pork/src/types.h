@@ -8,6 +8,11 @@ enum {
     TOKEN_INT_LITERAL = 256,
     TOKEN_IDENTIFIER,
 
+    TOKEN_LESS_EQUAL,
+    TOKEN_GREATER_EQUAL,
+    TOKEN_EQUAL_EQUAL,
+    TOKEN_BANG_EQUAL,
+
     TOKEN_RETURN,
     TOKEN_LET
 };
@@ -29,6 +34,11 @@ typedef enum {
     AST_SUB,
     AST_MUL,
     AST_DIV,
+
+    AST_LESS,
+    AST_LEQUAL,
+    AST_EQUAL,
+    AST_NEQUAL,
 
     AST_ASSIGN,
 
@@ -77,6 +87,11 @@ typedef enum {
     OP_SUB,
     OP_MUL,
     OP_DIV,
+
+    OP_LESS,
+    OP_LEQUAL,
+    OP_EQUAL,
+    OP_NEQUAL,
 
     OP_RET,
 

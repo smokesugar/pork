@@ -65,10 +65,18 @@ internal int binary_precedence(Token op) {
         case '+':
         case '-':
             return 10;
+        case '<':
+        case '>':
+        case TOKEN_LESS_EQUAL:
+        case TOKEN_GREATER_EQUAL:
+            return 7;
+        case TOKEN_EQUAL_EQUAL:
+        case TOKEN_BANG_EQUAL:
+            return 5;
     }
 }
 
-internal ASTKind binary_ast_kind(Token op) {
+internal ASTKind binary_ast_kind(Token op, bool* swap) {
     switch (op.kind) {
         default:
             assert(false);
@@ -81,6 +89,20 @@ internal ASTKind binary_ast_kind(Token op) {
             return AST_ADD;
         case '-':
             return AST_SUB;
+        case '<':
+            return AST_LESS;
+        case '>':
+            *swap = true;
+            return AST_LESS;
+        case TOKEN_LESS_EQUAL:
+            return AST_LEQUAL;
+        case TOKEN_GREATER_EQUAL:
+            *swap = true;
+            return AST_LEQUAL;
+        case TOKEN_EQUAL_EQUAL:
+            return AST_EQUAL;
+        case TOKEN_BANG_EQUAL:
+            return AST_NEQUAL;
     }
 }
 
@@ -94,9 +116,10 @@ internal ASTNode* parse_binary(Parser* parser, int caller_precedence) {
         ASTNode* right = parse_binary(parser, binary_precedence(op));
         if (!right) return 0;
 
-        ASTNode* binary = new_node(parser, binary_ast_kind(op), op);
-        binary->left = left;
-        binary->right = right;
+        bool swap = false;
+        ASTNode* binary = new_node(parser, binary_ast_kind(op, &swap), op);
+        binary->left = swap ? right : left;
+        binary->right = swap ? left : right;
 
         left = binary;
     }
@@ -221,7 +244,7 @@ internal Variable* find_variable(Scope* scope, Token name) {
 }
 
 internal bool process_ast(Parser* parser, Scope* scope, ASTNode* node) {
-    static_assert(NUM_AST_KINDS == 11, "not all ast kinds handled");
+    static_assert(NUM_AST_KINDS == 15, "not all ast kinds handled");
     switch (node->kind) {
         default:
             assert(false);
@@ -246,6 +269,10 @@ internal bool process_ast(Parser* parser, Scope* scope, ASTNode* node) {
         case AST_SUB:
         case AST_MUL:
         case AST_DIV:
+        case AST_LESS:
+        case AST_LEQUAL:
+        case AST_EQUAL:
+        case AST_NEQUAL:
         {
             bool success = true;
 
