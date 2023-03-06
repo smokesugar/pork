@@ -141,5 +141,5 @@ struct BasicBlock {
     int end;
 
     int successor_count;
-    BasicBlock** successors;
+    BasicBlock* successors[2];
 };

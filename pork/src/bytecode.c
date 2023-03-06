@@ -301,7 +301,6 @@ BasicBlock* analyze_control_flow(Arena* arena, char* source, Bytecode* bytecode)
         Instruction* ins = bytecode->instructions + (block->end-1);
         switch (ins->op) {
             default:
-                block->successors = arena_push_array(arena, BasicBlock*, 1);
                 block->successors[0] = block->next ? block->next : &end_block;
                 ++block->successor_count;
                 break;
@@ -310,13 +309,11 @@ BasicBlock* analyze_control_flow(Arena* arena, char* source, Bytecode* bytecode)
                 break;
 
             case OP_JMP:
-                block->successors = arena_push_array(arena, BasicBlock*, 1);
                 block->successors[0] = labelled_blocks[ins->a1];
                 ++block->successor_count;
                 break;
 
             case OP_CJMP:
-                block->successors = arena_push_array(arena, BasicBlock*, 2);
                 block->successors[0] = labelled_blocks[ins->a2];
                 ++block->successor_count;
                 if (labelled_blocks[ins->a3] != block->successors[0]) {
