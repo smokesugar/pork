@@ -123,13 +123,17 @@ int main() {
                 printf("Returned with %lld.\n", regs[ins->a1]);
                 return 0;
 
-            case OP_JMP:
-                i = (int)ins->a1;
+            case OP_JMP: {
+                i64 label = ins->a1;
+                i = bytecode->label_locations[label];
                 continue;
+            }
 
-            case OP_CJMP:
-                i = (int)(regs[ins->a1] ? ins->a2 : ins->a3);
+            case OP_CJMP: {
+                i64 label = regs[ins->a1] ? ins->a2 : ins->a3;
+                i = bytecode->label_locations[label];
                 continue;
+            }
         }
 
         ++i;

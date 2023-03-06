@@ -17,6 +17,7 @@ internal void emit(Translator* translator, Op op, i64 a1, i64 a2, i64 a3) {
     ins->a1 = a1;
     ins->a2 = a2;
     ins->a3 = a3;
+    ins->label = -1;
 }
 
 internal i64 get_reg(Translator* translator) {
@@ -180,6 +181,44 @@ Bytecode* generate_bytecode(Arena* arena, ASTNode* ast) {
 
     translate(&translator, ast);
 
+    // Remap labels to remove duplicates
+
+    int label_count = 0;
+
+    // Go through all labelled instructions and assign a new label
+    for (int i = 0; i < translator.label_count; ++i)
+    {
+        int ins_index = translator.label_locations[i];
+        if (ins_index < bytecode->length)
+        {
+            Instruction* ins = bytecode->instructions + ins_index;
+            if (ins->label == -1) {
+                assert(label_count < MAX_LABEL_COUNT);
+                ins->label = label_count++;
+                bytecode->label_locations[ins->label] = ins_index;
+            }
+        }
+    }
+
+    // End label
+    assert(label_count < MAX_LABEL_COUNT);
+    bytecode->label_locations[label_count++] = bytecode->length;
+
+    // Set translator label locations to the new label index
+    for (int i = 0; i < translator.label_count; ++i)
+    {
+        int ins_index = translator.label_locations[i];
+        if (ins_index < bytecode->length)
+        {
+            Instruction* ins = bytecode->instructions + ins_index;
+            translator.label_locations[i] = ins->label;
+        }
+        else {
+            translator.label_locations[i] = label_count-1;
+        }
+    }
+
+    // Remap each instruction to point to new labels
     for (int i = 0; i < bytecode->length; ++i) {
         Instruction* ins = bytecode->instructions + i;
         

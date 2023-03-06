@@ -86,6 +86,7 @@ struct ASTNode {
 };
 
 #define MAX_INSTRUCTION_COUNT (1 << 13)
+#define MAX_LABEL_COUNT (1 << 10)
 
 typedef enum {
     OP_INVALID,
@@ -115,10 +116,12 @@ typedef struct {
     i64 a1;
     i64 a2;
     i64 a3;
+    int label;
 } Instruction;
 
 typedef struct {
     int length;
     Instruction instructions[MAX_INSTRUCTION_COUNT];
+    int label_locations[MAX_LABEL_COUNT];
     i64 register_count;
 } Bytecode;

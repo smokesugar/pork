@@ -6,6 +6,5 @@
     }
 
     let bruh2 = bruh + 1;
-    
-    return bruh2 * bruh;
+    return bruh * bruh2;
 }
