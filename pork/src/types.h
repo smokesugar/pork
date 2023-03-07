@@ -1,6 +1,7 @@
 #pragma once
 
 #include "base.h"
+#include "set.h"
 
 enum {
     TOKEN_EOF = 0,
@@ -134,9 +135,14 @@ typedef struct BasicBlock BasicBlock;
 struct BasicBlock {
     int index;
     BasicBlock* next;
+
     bool has_user_code;
     bool reachable;
     int first_line;
+
+    Set ue_var;
+    Set var_kill;
+    Set live_out;
 
     int start;
     int end;

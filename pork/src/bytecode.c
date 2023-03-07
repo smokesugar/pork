@@ -297,8 +297,11 @@ BasicBlock* analyze_control_flow(Arena* arena, char* source, Bytecode* bytecode)
     }
 
     for (BasicBlock* block = root; block; block = block->next) {
-        if (block->end == block->start)
+        if (block->end == block->start) {
+            block->successors[0] = block->next ? block->next : &end_block;
+            ++block->successor_count;
             continue;
+        }
 
         Instruction* ins = bytecode->instructions + (block->end-1);
         switch (ins->op) {
@@ -368,4 +371,95 @@ BasicBlock* analyze_control_flow(Arena* arena, char* source, Bytecode* bytecode)
     }
 
     return root;
+}
+
+void analyze_data_flow(BasicBlock* graph, Bytecode* bytecode) {
+    for (BasicBlock* b = graph; b; b = b->next)
+    {
+        for (int i = b->start; i < b->end; ++i)
+        {
+            Instruction* ins = bytecode->instructions + i;
+            static_assert(NUM_OPS == 14, "not all ops handled");
+            switch (ins->op)
+            {
+                default:
+                    assert(false);
+                    break;
+
+                case OP_JMP:
+                    break;
+
+                case OP_IMM: // Define a1
+                    set_insert(&b->var_kill, ins->a1);
+                    break;
+
+                case OP_COPY: // Define a1, use a2
+                    if (!set_has(&b->var_kill, ins->a2))
+                        set_insert(&b->ue_var, ins->a2);
+                    set_insert(&b->var_kill, ins->a1);
+                    break;
+
+                case OP_ADD:
+                case OP_SUB:
+                case OP_MUL:
+                case OP_DIV:
+                case OP_LESS:
+                case OP_LEQUAL:
+                case OP_EQUAL:
+                case OP_NEQUAL: // Define a1, use a2 and a3
+                    if (!set_has(&b->var_kill, ins->a2))
+                        set_insert(&b->ue_var, ins->a2);
+                    if (!set_has(&b->var_kill, ins->a3))
+                        set_insert(&b->ue_var, ins->a3);
+                    set_insert(&b->var_kill, ins->a1);
+                    break;
+
+                case OP_RET:
+                case OP_CJMP: // Use a1
+                    if (!set_has(&b->var_kill, ins->a1))
+                        set_insert(&b->ue_var, ins->a1);
+                    break;
+            }
+        }
+    }
+
+    for (;;) {
+        bool changed = false;
+
+        for (BasicBlock* n = graph; n; n = n->next) {
+            int initial_size = n->live_out.count;
+
+            for (int i = 0; i < n->successor_count; ++i) {
+                BasicBlock* m = n->successors[i];
+                
+                foreach_set(&m->ue_var, x) {
+                    set_insert(&n->live_out, x.value);
+                }
+
+                foreach_set(&m->live_out, x) {
+                    if (!set_has(&m->var_kill, x.value))
+                        set_insert(&n->live_out, x.value);
+                }
+            }
+
+            if (n->live_out.count != initial_size)
+                changed = true;
+        }
+
+        if (!changed)
+            break;
+    }
+
+    /*
+    Set uinitialized_variables = {0};
+
+    foreach_set(&graph->ue_var, x) {
+        set_insert(&uinitialized_variables, x.value);
+    }
+
+    foreach_set(&graph->live_out, x) {
+        if (!set_has(&graph->var_kill, x.value))
+            set_insert(&uinitialized_variables, x.value);
+    }
+    */
 }

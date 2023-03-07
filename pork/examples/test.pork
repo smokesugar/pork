@@ -1,5 +1,5 @@
 {
-    let bruh = 0;
+    let bruh;
 
     while bruh < 20 {
         bruh = bruh + 1;

@@ -3,6 +3,7 @@
 #include "base.h"
 #include "parse.h"
 #include "bytecode.h"
+#include "set.h"
 
 static Arena* scratch_arenas[2];
 
@@ -76,6 +77,14 @@ int main() {
     Bytecode* bytecode = generate_bytecode(arena, ast);
     BasicBlock* cfg = analyze_control_flow(arena, source, bytecode);
     if (!cfg) return 1;
+    analyze_data_flow(cfg, bytecode);
+
+    for (BasicBlock* block = cfg; block; block = block->next) {
+        printf("Block %d:\n", block->index);
+        foreach_set(&block->live_out, x) {
+            printf("  %lld\n", x.value);
+        }
+    }
 
     i64 regs[1024] = {0};
 
