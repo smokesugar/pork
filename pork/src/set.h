@@ -24,4 +24,6 @@ SetIterator set_begin(Set* set);
 bool set_continue(SetIterator* it);
 void set_next(SetIterator* it);
 
+Set set_clone(Set* set);
+
 #define foreach_set(set, it)  for (SetIterator it = set_begin(set); set_continue(&it); set_next(&it))

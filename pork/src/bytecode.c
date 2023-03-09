@@ -463,3 +463,262 @@ void analyze_data_flow(BasicBlock* graph, Bytecode* bytecode) {
     }
     */
 }
+
+typedef struct AdjacencyNode AdjacencyNode;
+struct AdjacencyNode {
+    bool active;
+    i64 var;
+    AdjacencyNode* next;
+};
+
+static bool get_interference(u64 width_bits, u8* matrix, i64 a, i64 b) {
+    i64 row = b > a ? b : a;
+    i64 column = b > a ? a : b;
+    i64 bit_index = row * width_bits + column;
+    u8 value = (matrix[bit_index/8] >> (bit_index % 8)) & 1;
+    return value;
+}
+
+static void add_interference(Arena* arena, u64 width_bits, u8* matrix, i64 a, i64 b, AdjacencyNode** adjacency_lists) {
+    if (get_interference(width_bits, matrix, a, b)) {
+        return;
+    }
+
+    i64 row = b > a ? b : a;
+    i64 column = b > a ? a : b;
+    i64 bit_index = row * width_bits + column;
+    u8* byte = matrix + (bit_index/8);
+    *byte |= 1 << (bit_index % 8);
+
+    AdjacencyNode* node_a = arena_push_type(arena, AdjacencyNode);
+    node_a->active = true;
+    node_a->var = b;
+    node_a->next = adjacency_lists[a];
+    adjacency_lists[a] = node_a;
+
+    AdjacencyNode* node_b = arena_push_type(arena, AdjacencyNode);
+    node_b->active = true;
+    node_b->var = a;
+    node_b->next = adjacency_lists[b];
+    adjacency_lists[b] = node_b;
+}
+
+static AdjacencyNode* find_edge(AdjacencyNode* list, i64 var) {
+    while (list) {
+        if (list->var == var) {
+            return list;
+        }
+
+        list = list->next;
+    }
+
+    assert(false && "no edge exists");
+    return 0;
+}
+
+static u32 count_interferences(AdjacencyNode* list) {
+    u32 count = 0;
+    while (list) {
+        if (list->active) {
+            ++count;
+        }
+        list = list->next;
+    }
+    return count;
+}
+
+void allocate_registers(BasicBlock* graph, Bytecode* bytecode, u32 register_count) {
+    Scratch scratch = get_scratch(0);
+
+    u64 adjacency_matrix_bits = bytecode->register_count * bytecode->register_count;
+    u64 adjacency_matrix_bytes = adjacency_matrix_bits / 8 + (adjacency_matrix_bits % 8 != 0);
+    u8* adjacency_matrix = arena_push_zero(scratch.arena, adjacency_matrix_bytes);
+
+    AdjacencyNode** adjacency_lists = arena_push_array(scratch.arena, AdjacencyNode*, bytecode->register_count);
+    
+    for (BasicBlock* b = graph; b; b = b->next) {
+        Set live_now = b->live_out;
+
+        #define DEFINES(ai) \
+                    if (set_has(&live_now, ins->ai)) \
+                        set_remove(&live_now, ins->ai); \
+                    foreach_set(&live_now, other) { \
+                        add_interference(scratch.arena, bytecode->register_count, adjacency_matrix, other.value, ins->ai, adjacency_lists); \
+                    }
+
+        #define USES(ai) set_insert(&live_now, ins->ai)
+
+        for (int i = b->end-1; i >= b->start; --i) {
+            Instruction* ins = bytecode->instructions + i;
+
+            static_assert(NUM_OPS == 14, "not all ops handled");
+            switch (ins->op)
+            {
+                default:
+                    assert(false);
+                    break;
+
+                case OP_JMP:
+                    break;
+
+                case OP_IMM: // Define a1
+                    DEFINES(a1);
+                    break;
+
+                case OP_COPY: // Define a1, use a2
+                    DEFINES(a1);
+                    USES(a2);
+                    break;
+
+                case OP_ADD:
+                case OP_SUB:
+                case OP_MUL:
+                case OP_DIV:
+                case OP_LESS:
+                case OP_LEQUAL:
+                case OP_EQUAL:
+                case OP_NEQUAL: // Define a1, use a2 and a3
+                    DEFINES(a1);
+                    USES(a2);
+                    USES(a3);
+                    break;
+
+                case OP_RET:
+                case OP_CJMP: // Use a1
+                    USES(a1);
+                    break;
+            }
+        }
+    }
+
+    /*
+    for (int i = 0; i < bytecode->register_count; ++i) {
+        for (int j = 0; j < bytecode->register_count; ++j) {
+            printf("%c ", get_interference(bytecode->register_count, adjacency_matrix, i, j) ? 'X' : '.');
+        }
+        printf("\n");
+    }
+    */
+
+    int var_count = 0;
+    i64* vars = arena_push_array(scratch.arena, i64, bytecode->register_count);
+    i64* colors = arena_push_array(scratch.arena, i64, bytecode->register_count);
+
+    for (i64 i = 0; i < bytecode->register_count; ++i) {
+        vars[var_count++] = i;
+        colors[i] = -1;
+    }
+
+    int color_stack_count = 0;
+    i64* color_stack = arena_push_array(scratch.arena, i64, bytecode->register_count);
+
+    for (;;) {
+        bool any_removed = false;
+
+        for (i64 i = var_count-1; i >= 0; --i)
+        {
+            i64 var = vars[i];
+
+            u32 num_interferences = count_interferences(adjacency_lists[var]);
+            if (num_interferences < register_count)
+            {
+                color_stack[color_stack_count++] = var;
+                vars[i] = vars[--var_count];
+                
+                for (AdjacencyNode* edge = adjacency_lists[var]; edge; edge = edge->next) {
+                    edge->active = false;
+                    find_edge(adjacency_lists[edge->var], var)->active = false;
+                }
+
+                any_removed = true;
+            }
+        }
+
+        if (!any_removed)
+            break;
+    }
+
+    assert(var_count == 0);
+
+    /*
+    // TODO: spill metrics
+    for (i64 i = var_count-1; i >= 0; --i) {
+        color_stack[color_stack_count++] = vars[i];
+        vars[i] = vars[--var_count];
+    }
+    */
+
+    while (color_stack_count > 0) {
+        i64 var = color_stack[--color_stack_count];
+
+        bool occupied_colors[128] = {0};
+        assert(register_count <= LENGTH(occupied_colors));
+
+        for (AdjacencyNode* edge = adjacency_lists[var]; edge; edge = edge->next) {
+            if (edge->active) {
+                i64 edge_color = colors[edge->var];
+                assert(edge_color != -1);
+                occupied_colors[colors[edge->var]] = true;
+            }
+
+            find_edge(adjacency_lists[edge->var], var)->active = true;
+        }
+        
+        for (u32 i = 0; i < register_count; ++i) {
+            if (!occupied_colors[i]) {
+                colors[var] = i;
+                break;
+            }
+        }
+
+        assert(colors[var] != -1);
+    }
+
+    /*
+    for (i64 i = 0; i < bytecode->register_count; ++i) {
+        printf("%lld -> %lld\n", i, colors[i]);
+    }
+    */
+
+    for (int i = 0; i < bytecode->length; ++i) {
+        Instruction* ins = bytecode->instructions + i;
+        
+        static_assert(NUM_OPS == 14, "not all ops handled");
+        switch (ins->op)
+        {
+            default:
+                assert(false);
+                break;
+
+            case OP_JMP:
+                break;
+
+            case OP_IMM:
+            case OP_CJMP:
+            case OP_RET:
+                ins->a1 = colors[ins->a1];
+                break;
+
+            case OP_COPY:
+                ins->a1 = colors[ins->a1];
+                ins->a2 = colors[ins->a2];
+                break;
+
+            case OP_ADD:
+            case OP_SUB:
+            case OP_MUL:
+            case OP_DIV:
+            case OP_LESS:
+            case OP_LEQUAL:
+            case OP_EQUAL:
+            case OP_NEQUAL:
+                ins->a1 = colors[ins->a1];
+                ins->a2 = colors[ins->a2];
+                ins->a3 = colors[ins->a3];
+                break;
+        }
+    }
+
+    bytecode->register_count = register_count;
+    release_scratch(&scratch);
+}

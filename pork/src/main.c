@@ -78,13 +78,7 @@ int main() {
     BasicBlock* cfg = analyze_control_flow(arena, source, bytecode);
     if (!cfg) return 1;
     analyze_data_flow(cfg, bytecode);
-
-    for (BasicBlock* block = cfg; block; block = block->next) {
-        printf("Block %d:\n", block->index);
-        foreach_set(&block->live_out, x) {
-            printf("  %lld\n", x.value);
-        }
-    }
+    allocate_registers(cfg, bytecode, 4);
 
     i64 regs[1024] = {0};
 
