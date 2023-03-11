@@ -6,6 +6,8 @@
 #include "set.h"
 #include "semantics.h"
 
+#define VM_REGISTER_COUNT 4
+
 static Arena* scratch_arenas[2];
 
 Scratch get_scratch(Arena* conflict)
@@ -83,9 +85,9 @@ int main() {
     BasicBlock* cfg = analyze_control_flow(arena, source, bytecode);
     if (!cfg) return 1;
     analyze_data_flow(cfg, bytecode);
-    allocate_registers(cfg, bytecode, 4);
 
-    i64 regs[1024] = {0};
+    allocate_registers(cfg, bytecode, VM_REGISTER_COUNT);
+    i64 regs[VM_REGISTER_COUNT] = {0};
 
     for (int i = 0; i < bytecode->length;)
     {
