@@ -479,69 +479,82 @@ struct AdjacencyNode {
     AdjacencyNode* next;
 };
 
-internal bool get_interference(u64 width_bits, u8* matrix, i64 a, i64 b) {
+internal bool check_interference(i64 register_count, u8* matrix, i64 a, i64 b) {
     i64 row = b > a ? b : a;
     i64 column = b > a ? a : b;
-    i64 bit_index = row * width_bits + column;
+    i64 bit_index = row * register_count + column;
     u8 value = (matrix[bit_index/8] >> (bit_index % 8)) & 1;
     return value;
 }
 
-internal void add_interference(Arena* arena, u64 width_bits, u8* matrix, i64 a, i64 b, AdjacencyNode** adjacency_lists) {
-    if (get_interference(width_bits, matrix, a, b)) {
+internal AdjacencyNode* get_adjacency_node(Arena* arena, AdjacencyNode** free_list) {
+    if (!*free_list) {
+        return arena_push_type(arena, AdjacencyNode);
+    }
+    else {
+        AdjacencyNode* front = *free_list;
+        *free_list = (*free_list)->next;
+        memset(front, 0, sizeof(*front));
+        return front;
+    }
+}
+
+internal void add_interference(Arena* arena, AdjacencyNode** free_list, i64 register_count, u8* matrix, AdjacencyNode** adjacency_lists, i64 a, i64 b) {
+    if (check_interference(register_count, matrix, a, b)) {
         return;
     }
 
     i64 row = b > a ? b : a;
     i64 column = b > a ? a : b;
-    i64 bit_index = row * width_bits + column;
+    i64 bit_index = row * register_count + column;
     u8* byte = matrix + (bit_index/8);
     *byte |= 1 << (bit_index % 8);
 
-    AdjacencyNode* node_a = arena_push_type(arena, AdjacencyNode);
+    AdjacencyNode* node_a = get_adjacency_node(arena, free_list);
     node_a->active = true;
     node_a->var = b;
     node_a->next = adjacency_lists[a];
     adjacency_lists[a] = node_a;
 
-    AdjacencyNode* node_b = arena_push_type(arena, AdjacencyNode);
+    AdjacencyNode* node_b = get_adjacency_node(arena, free_list);
     node_b->active = true;
     node_b->var = a;
     node_b->next = adjacency_lists[b];
     adjacency_lists[b] = node_b;
 }
 
-internal AdjacencyNode** find_edge_pointer(AdjacencyNode** node, i64 var) {
-    while (*node) {
-        if ((*node)->var == var) {
-            return node;
-        }
-
-        node = &(*node)->next;
-    }
-
-    assert(false && "no edge exists");
-    return 0;
+internal u64 calculate_bit_matrix_size(i64 register_count) {
+    return register_count * register_count / 8 + (register_count % 8 != 0);
 }
 
-internal void remove_interference(u64 width_bits, u8* matrix, i64 a, i64 b, AdjacencyNode** adjacency_lists) {
-    assert(get_interference(width_bits, matrix, a, b));
+internal void clear_interference(i64 register_count, u8* matrix, AdjacencyNode** adjacency_lists, AdjacencyNode** free_list)
+{
+    memset(matrix, 0, calculate_bit_matrix_size(register_count));
 
-    i64 row = b > a ? b : a;
-    i64 column = b > a ? a : b;
-    i64 bit_index = row * width_bits + column;
-    u8* byte = matrix + (bit_index/8);
-    *byte &= ~(1 << (bit_index % 8));
-
-    AdjacencyNode** node_a = find_edge_pointer(adjacency_lists + a, b);
-    *node_a = (*node_a)->next;
-
-    AdjacencyNode** node_b = find_edge_pointer(adjacency_lists + b, a);
-    *node_b = (*node_b)->next;
+    for (i64 i = 0; i < register_count; ++i) {
+        if (adjacency_lists[i]) {
+            AdjacencyNode* last = adjacency_lists[i];
+            while (last->next) {
+                last = last->next;
+            }
+            last->next = *free_list;
+            *free_list = adjacency_lists[i];
+            adjacency_lists[i] = 0;
+        }
+    }
 }
 
 internal AdjacencyNode* find_edge(AdjacencyNode* list, i64 var) {
-    return *find_edge_pointer(&list, var);
+    while(list) {
+        if (list->var == var) {
+            return list;
+        }
+
+        list = list->next;
+    }
+
+    assert(false);
+    return 0;
 }
 
 internal u32 count_active_interferences(AdjacencyNode* list) {
@@ -569,80 +582,13 @@ internal i64 get_lr(i64* mapping, i64 reg) {
 void allocate_registers(BasicBlock* graph, Bytecode* bytecode, u32 register_count) {
     Scratch scratch = get_scratch(0);
 
-    u64 adjacency_matrix_bits = bytecode->register_count * bytecode->register_count;
-    u64 adjacency_matrix_bytes = adjacency_matrix_bits / 8 + (adjacency_matrix_bits % 8 != 0);
-    u8* adjacency_matrix = arena_push_zero(scratch.arena, adjacency_matrix_bytes);
+    u8* adjacency_matrix = arena_push_zero(scratch.arena, calculate_bit_matrix_size(bytecode->register_count));
 
     AdjacencyNode** adjacency_lists = arena_push_array(scratch.arena, AdjacencyNode*, bytecode->register_count);
+    AdjacencyNode* adjacency_node_free_list = 0;
 
     int copy_instruction_count = 0;
     Instruction** copy_instructions = arena_push_array(scratch.arena, Instruction*, bytecode->length);
-
-    for (BasicBlock* b = graph; b; b = b->next) {
-        Set live_now = b->live_out;
-
-        #define DEFINES(ai) \
-                    if (set_has(&live_now, ins->ai)) \
-                        set_remove(&live_now, ins->ai); \
-                    foreach_set(&live_now, other) { \
-                        add_interference(scratch.arena, bytecode->register_count, adjacency_matrix, other.value, ins->ai, adjacency_lists); \
-                    }
-
-        #define USES(ai) set_insert(&live_now, ins->ai)
-
-        for (int i = b->end-1; i >= b->start; --i) {
-            Instruction* ins = bytecode->instructions + i;
-
-            static_assert(NUM_OPS == 15, "not all ops handled");
-            switch (ins->op)
-            {
-                default:
-                    assert(false);
-                    break;
-
-                case OP_NOOP:
-                case OP_JMP:
-                    break;
-
-                case OP_IMM: // Define a1
-                    DEFINES(a1);
-                    break;
-
-                case OP_COPY: // Copies require special treatement as they can be coalesced.
-                    if (set_has(&live_now, ins->a1))
-                        set_remove(&live_now, ins->a1);
-                    foreach_set(&live_now, other) { \
-                        if (other.value != ins->a2) {
-                            add_interference(scratch.arena, bytecode->register_count, adjacency_matrix, other.value, ins->a1, adjacency_lists); \
-                        }
-                    }
-                    USES(a2);
-                    copy_instructions[copy_instruction_count++] = ins;
-                    break;
-
-                case OP_ADD:
-                case OP_SUB:
-                case OP_MUL:
-                case OP_DIV:
-                case OP_LESS:
-                case OP_LEQUAL:
-                case OP_EQUAL:
-                case OP_NEQUAL: // Define a1, use a2 and a3
-                    DEFINES(a1);
-                    USES(a2);
-                    USES(a3);
-                    break;
-
-                case OP_RET:
-                case OP_CJMP: // Use a1
-                    USES(a1);
-                    break;
-            }
-        }
-
-        #undef USES
-        #undef DEFINES
-    }
 
     i64* lrs = arena_push_array(scratch.arena, i64, bytecode->register_count);
     for (i64 i = 0; i < bytecode->register_count; ++i) {
@@ -651,6 +597,70 @@ void allocate_registers(BasicBlock* graph, Bytecode* bytecode, u32 register_coun
 
     for (;;) {
         bool any_coalesced = false;
+
+        clear_interference(bytecode->register_count, adjacency_matrix, adjacency_lists, &adjacency_node_free_list);
+        copy_instruction_count = 0;
+
+        for (BasicBlock* b = graph; b; b = b->next) {
+            Set live_now = b->live_out;
+
+            #define DEFINES(ai, is_copy) \
+                        if (set_has(&live_now, get_lr(lrs, ins->ai))) \
+                            set_remove(&live_now, get_lr(lrs, ins->ai)); \
+                        foreach_set(&live_now, other) { \
+                            if (!(is_copy) || get_lr(lrs, other.value) != get_lr(lrs, ins->a2)) { \
+                                add_interference(scratch.arena, &adjacency_node_free_list, bytecode->register_count, adjacency_matrix, adjacency_lists, get_lr(lrs, other.value), get_lr(lrs, ins->ai)); \
+                            } \
+                        }
+
+            #define USES(ai) set_insert(&live_now, ins->ai)
+
+            for (int i = b->end-1; i >= b->start; --i) {
+                Instruction* ins = bytecode->instructions + i;
+
+                static_assert(NUM_OPS == 15, "not all ops handled");
+                switch (ins->op)
+                {
+                    default:
+                        assert(false);
+                        break;
+
+                    case OP_NOOP:
+                    case OP_JMP:
+                        break;
+
+                    case OP_IMM: // Define a1
+                        DEFINES(a1, false);
+                        break;
+
+                    case OP_COPY: // Copies require special treatement as they can be coalesced.
+                        DEFINES(a1, true);
+                        copy_instructions[copy_instruction_count++] = ins;
+                        break;
+
+                    case OP_ADD:
+                    case OP_SUB:
+                    case OP_MUL:
+                    case OP_DIV:
+                    case OP_LESS:
+                    case OP_LEQUAL:
+                    case OP_EQUAL:
+                    case OP_NEQUAL: // Define a1, use a2 and a3
+                        DEFINES(a1, false);
+                        USES(a2);
+                        USES(a3);
+                        break;
+
+                    case OP_RET:
+                    case OP_CJMP: // Use a1
+                        USES(a1);
+                        break;
+                }
+            }
+
+            #undef USES
+            #undef DEFINES
+        }
 
         for (int i = copy_instruction_count-1; i >= 0; --i)
         {
@@ -664,19 +674,9 @@ void allocate_registers(BasicBlock* graph, Bytecode* bytecode, u32 register_coun
                 copy->op = OP_NOOP;
                 copy_instructions[i] = copy_instructions[--copy_instruction_count];
             }
-            else if (!get_interference(bytecode->register_count, adjacency_matrix, lr1, lr2))
+            else if (!check_interference(bytecode->register_count, adjacency_matrix, lr1, lr2))
             {
-                for (i64 lr3 = 0; lr3 < bytecode->register_count; ++lr3)
-                {
-                    if (get_interference(bytecode->register_count, adjacency_matrix, lr2, lr3))
-                    {
-                        remove_interference(bytecode->register_count, adjacency_matrix, lr2, lr3, adjacency_lists);
-                        add_interference(scratch.arena, bytecode->register_count, adjacency_matrix, lr1, lr3, adjacency_lists);
-                    }
-                }
-
                 //printf("Coalesced %lld and %lld\n", lr1, lr2);
-
                 lrs[lr2] = lr1;
                 any_coalesced = true;
             }

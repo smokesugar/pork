@@ -7,11 +7,15 @@
     }
 
     u64 chungus = 0;
+    u64 result;
 
     if 1 {
         u64 bruh2 = bruh + 1;
-        return bruh * bruh2;
+        result = bruh * bruh2;
+    }
+    else {
+        result = 10;
     }
 
-    return 3 + chungus;
+    return result;
 }
