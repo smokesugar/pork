@@ -86,10 +86,13 @@ int main() {
     {
         Instruction* ins = bytecode->instructions + i;
 
-        static_assert(NUM_OPS == 14, "not all ops handled");
+        static_assert(NUM_OPS == 15, "not all ops handled");
         switch (ins->op) {
             default:
                 assert(false);
+                break;
+
+            case OP_NOOP:
                 break;
 
             case OP_IMM:

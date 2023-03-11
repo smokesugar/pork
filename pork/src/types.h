@@ -91,6 +91,7 @@ struct ASTNode {
 
 typedef enum {
     OP_INVALID,
+    OP_NOOP,
 
     OP_IMM,
     OP_COPY,

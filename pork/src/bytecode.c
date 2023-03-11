@@ -379,24 +379,32 @@ void analyze_data_flow(BasicBlock* graph, Bytecode* bytecode) {
         for (int i = b->start; i < b->end; ++i)
         {
             Instruction* ins = bytecode->instructions + i;
-            static_assert(NUM_OPS == 14, "not all ops handled");
+
+            #define DEFINES(ai) \
+                    set_insert(&b->var_kill, ins->ai)
+
+            #define USES(ai) \
+                    if (!set_has(&b->var_kill, ins->ai)) \
+                        set_insert(&b->ue_var, ins->ai);
+
+            static_assert(NUM_OPS == 15, "not all ops handled");
             switch (ins->op)
             {
                 default:
                     assert(false);
                     break;
 
+                case OP_NOOP:
                 case OP_JMP:
                     break;
 
                 case OP_IMM: // Define a1
-                    set_insert(&b->var_kill, ins->a1);
+                    DEFINES(a1);
                     break;
 
                 case OP_COPY: // Define a1, use a2
-                    if (!set_has(&b->var_kill, ins->a2))
-                        set_insert(&b->ue_var, ins->a2);
-                    set_insert(&b->var_kill, ins->a1);
+                    USES(a2);
+                    DEFINES(a1);
                     break;
 
                 case OP_ADD:
@@ -407,19 +415,19 @@ void analyze_data_flow(BasicBlock* graph, Bytecode* bytecode) {
                 case OP_LEQUAL:
                 case OP_EQUAL:
                 case OP_NEQUAL: // Define a1, use a2 and a3
-                    if (!set_has(&b->var_kill, ins->a2))
-                        set_insert(&b->ue_var, ins->a2);
-                    if (!set_has(&b->var_kill, ins->a3))
-                        set_insert(&b->ue_var, ins->a3);
-                    set_insert(&b->var_kill, ins->a1);
+                    USES(a2);
+                    USES(a3);
+                    DEFINES(a1);
                     break;
 
                 case OP_RET:
                 case OP_CJMP: // Use a1
-                    if (!set_has(&b->var_kill, ins->a1))
-                        set_insert(&b->ue_var, ins->a1);
+                    USES(a1);
                     break;
             }
+
+            #undef USES
+            #undef DEFINES
         }
     }
 
@@ -503,20 +511,40 @@ static void add_interference(Arena* arena, u64 width_bits, u8* matrix, i64 a, i6
     adjacency_lists[b] = node_b;
 }
 
-static AdjacencyNode* find_edge(AdjacencyNode* list, i64 var) {
-    while (list) {
-        if (list->var == var) {
-            return list;
+static AdjacencyNode** find_edge_pointer(AdjacencyNode** node, i64 var) {
+    while (*node) {
+        if ((*node)->var == var) {
+            return node;
         }
 
-        list = list->next;
+        node = &(*node)->next;
     }
 
     assert(false && "no edge exists");
     return 0;
 }
 
-static u32 count_interferences(AdjacencyNode* list) {
+static void remove_interference(u64 width_bits, u8* matrix, i64 a, i64 b, AdjacencyNode** adjacency_lists) {
+    assert(get_interference(width_bits, matrix, a, b));
+
+    i64 row = b > a ? b : a;
+    i64 column = b > a ? a : b;
+    i64 bit_index = row * width_bits + column;
+    u8* byte = matrix + (bit_index/8);
+    *byte &= ~(1 << (bit_index % 8));
+
+    AdjacencyNode** node_a = find_edge_pointer(adjacency_lists + a, b);
+    *node_a = (*node_a)->next;
+
+    AdjacencyNode** node_b = find_edge_pointer(adjacency_lists + b, a);
+    *node_b = (*node_b)->next;
+}
+
+static AdjacencyNode* find_edge(AdjacencyNode* list, i64 var) {
+    return *find_edge_pointer(&list, var);
+}
+
+static u32 count_active_interferences(AdjacencyNode* list) {
     u32 count = 0;
     while (list) {
         if (list->active) {
@@ -527,6 +555,17 @@ static u32 count_interferences(AdjacencyNode* list) {
     return count;
 }
 
+static i64 get_lr(i64* mapping, i64 reg) {
+    if (mapping[reg] == reg) {
+        return reg;
+    }
+
+    i64 actual = get_lr(mapping, mapping[reg]);
+    mapping[reg] = actual;
+
+    return actual;
+}
+
 void allocate_registers(BasicBlock* graph, Bytecode* bytecode, u32 register_count) {
     Scratch scratch = get_scratch(0);
 
@@ -535,7 +574,10 @@ void allocate_registers(BasicBlock* graph, Bytecode* bytecode, u32 register_coun
     u8* adjacency_matrix = arena_push_zero(scratch.arena, adjacency_matrix_bytes);
 
     AdjacencyNode** adjacency_lists = arena_push_array(scratch.arena, AdjacencyNode*, bytecode->register_count);
-    
+
+    int copy_instruction_count = 0;
+    Instruction** copy_instructions = arena_push_array(scratch.arena, Instruction*, bytecode->length);
+
     for (BasicBlock* b = graph; b; b = b->next) {
         Set live_now = b->live_out;
 
@@ -551,13 +593,14 @@ void allocate_registers(BasicBlock* graph, Bytecode* bytecode, u32 register_coun
         for (int i = b->end-1; i >= b->start; --i) {
             Instruction* ins = bytecode->instructions + i;
 
-            static_assert(NUM_OPS == 14, "not all ops handled");
+            static_assert(NUM_OPS == 15, "not all ops handled");
             switch (ins->op)
             {
                 default:
                     assert(false);
                     break;
 
+                case OP_NOOP:
                 case OP_JMP:
                     break;
 
@@ -565,9 +608,16 @@ void allocate_registers(BasicBlock* graph, Bytecode* bytecode, u32 register_coun
                     DEFINES(a1);
                     break;
 
-                case OP_COPY: // Define a1, use a2
-                    DEFINES(a1);
+                case OP_COPY: // Copies require special treatement as they can be coalesced.
+                    if (set_has(&live_now, ins->a1))
+                        set_remove(&live_now, ins->a1);
+                    foreach_set(&live_now, other) { \
+                        if (other.value != ins->a2) {
+                            add_interference(scratch.arena, bytecode->register_count, adjacency_matrix, other.value, ins->a1, adjacency_lists); \
+                        }
+                    }
                     USES(a2);
+                    copy_instructions[copy_instruction_count++] = ins;
                     break;
 
                 case OP_ADD:
@@ -589,45 +639,82 @@ void allocate_registers(BasicBlock* graph, Bytecode* bytecode, u32 register_coun
                     break;
             }
         }
+
+        #undef USES
+        #undef DEFINES
     }
 
-    /*
-    for (int i = 0; i < bytecode->register_count; ++i) {
-        for (int j = 0; j < bytecode->register_count; ++j) {
-            printf("%c ", get_interference(bytecode->register_count, adjacency_matrix, i, j) ? 'X' : '.');
-        }
-        printf("\n");
-    }
-    */
-
-    int var_count = 0;
-    i64* vars = arena_push_array(scratch.arena, i64, bytecode->register_count);
-    i64* colors = arena_push_array(scratch.arena, i64, bytecode->register_count);
-
+    i64* lrs = arena_push_array(scratch.arena, i64, bytecode->register_count);
     for (i64 i = 0; i < bytecode->register_count; ++i) {
-        vars[var_count++] = i;
+        lrs[i] = i;
+    }
+
+    for (;;) {
+        bool any_coalesced = false;
+
+        for (int i = copy_instruction_count-1; i >= 0; --i)
+        {
+            Instruction* copy = copy_instructions[i];
+            assert(copy->op == OP_COPY);
+
+            i64 lr1 = get_lr(lrs, copy->a1);
+            i64 lr2 = get_lr(lrs, copy->a2);
+
+            if (lr1 == lr2) {
+                copy->op = OP_NOOP;
+                copy_instructions[i] = copy_instructions[--copy_instruction_count];
+            }
+            else if (!get_interference(bytecode->register_count, adjacency_matrix, lr1, lr2))
+            {
+                for (i64 lr3 = 0; lr3 < bytecode->register_count; ++lr3)
+                {
+                    if (get_interference(bytecode->register_count, adjacency_matrix, lr2, lr3))
+                    {
+                        remove_interference(bytecode->register_count, adjacency_matrix, lr2, lr3, adjacency_lists);
+                        add_interference(scratch.arena, bytecode->register_count, adjacency_matrix, lr1, lr3, adjacency_lists);
+                    }
+                }
+
+                //printf("Coalesced %lld and %lld\n", lr1, lr2);
+
+                lrs[lr2] = lr1;
+                any_coalesced = true;
+            }
+        }
+
+        if (!any_coalesced)
+            break;
+    }
+
+    Set live_ranges_to_select = {0};
+    for (i64 i = 0; i < bytecode->register_count; ++i) {
+        set_insert(&live_ranges_to_select, get_lr(lrs, i));
+    }
+
+    i64* colors = arena_push_array(scratch.arena, i64, bytecode->register_count);
+    for (i64 i = 0; i < bytecode->register_count; ++i) {
         colors[i] = -1;
     }
 
-    int color_stack_count = 0;
-    i64* color_stack = arena_push_array(scratch.arena, i64, bytecode->register_count);
+    int select_count = 0;
+    i64* select_stack = arena_push_array(scratch.arena, i64, bytecode->register_count);
 
     for (;;) {
         bool any_removed = false;
 
-        for (i64 i = var_count-1; i >= 0; --i)
+        foreach_set(&live_ranges_to_select, lr_it)
         {
-            i64 var = vars[i];
+            i64 lr = lr_it.value;
 
-            u32 num_interferences = count_interferences(adjacency_lists[var]);
+            u32 num_interferences = count_active_interferences(adjacency_lists[lr]);
             if (num_interferences < register_count)
             {
-                color_stack[color_stack_count++] = var;
-                vars[i] = vars[--var_count];
+                select_stack[select_count++] = lr;
+                set_remove(&live_ranges_to_select, lr);
                 
-                for (AdjacencyNode* edge = adjacency_lists[var]; edge; edge = edge->next) {
+                for (AdjacencyNode* edge = adjacency_lists[lr]; edge; edge = edge->next) {
                     edge->active = false;
-                    find_edge(adjacency_lists[edge->var], var)->active = false;
+                    find_edge(adjacency_lists[edge->var], lr)->active = false;
                 }
 
                 any_removed = true;
@@ -638,70 +725,67 @@ void allocate_registers(BasicBlock* graph, Bytecode* bytecode, u32 register_coun
             break;
     }
 
-    assert(var_count == 0);
+    assert(live_ranges_to_select.count == 0);
 
-    /*
-    // TODO: spill metrics
-    for (i64 i = var_count-1; i >= 0; --i) {
-        color_stack[color_stack_count++] = vars[i];
-        vars[i] = vars[--var_count];
-    }
-    */
+    // TODO: Select non-trivially colorable LRs based on spill metrics
 
-    while (color_stack_count > 0) {
-        i64 var = color_stack[--color_stack_count];
+    while (select_count > 0) {
+        i64 lr = select_stack[--select_count];
 
         bool occupied_colors[128] = {0};
         assert(register_count <= LENGTH(occupied_colors));
 
-        for (AdjacencyNode* edge = adjacency_lists[var]; edge; edge = edge->next) {
+        for (AdjacencyNode* edge = adjacency_lists[lr]; edge; edge = edge->next) {
             if (edge->active) {
                 i64 edge_color = colors[edge->var];
                 assert(edge_color != -1);
                 occupied_colors[colors[edge->var]] = true;
             }
 
-            find_edge(adjacency_lists[edge->var], var)->active = true;
+            find_edge(adjacency_lists[edge->var], lr)->active = true;
         }
         
         for (u32 i = 0; i < register_count; ++i) {
             if (!occupied_colors[i]) {
-                colors[var] = i;
+                colors[lr] = i;
                 break;
             }
         }
 
-        assert(colors[var] != -1);
+        assert(colors[lr] != -1);
     }
 
     /*
     for (i64 i = 0; i < bytecode->register_count; ++i) {
-        printf("%lld -> %lld\n", i, colors[i]);
+        printf("%lld -> %lld\n", i, colors[get_lr(lrs, i)]);
     }
     */
 
     for (int i = 0; i < bytecode->length; ++i) {
         Instruction* ins = bytecode->instructions + i;
+
+        #define REMAP(var) colors[get_lr(lrs, var)]
         
-        static_assert(NUM_OPS == 14, "not all ops handled");
+        static_assert(NUM_OPS == 15, "not all ops handled");
         switch (ins->op)
         {
             default:
                 assert(false);
                 break;
 
+            case OP_NOOP:
             case OP_JMP:
                 break;
 
             case OP_IMM:
             case OP_CJMP:
             case OP_RET:
-                ins->a1 = colors[ins->a1];
+                ins->a1 = REMAP(ins->a1);
                 break;
 
             case OP_COPY:
-                ins->a1 = colors[ins->a1];
-                ins->a2 = colors[ins->a2];
+                ins->a1 = REMAP(ins->a1);
+                ins->a2 = REMAP(ins->a2);
                 break;
 
             case OP_ADD:
@@ -712,11 +796,13 @@ void allocate_registers(BasicBlock* graph, Bytecode* bytecode, u32 register_coun
             case OP_LEQUAL:
             case OP_EQUAL:
             case OP_NEQUAL:
-                ins->a1 = colors[ins->a1];
-                ins->a2 = colors[ins->a2];
-                ins->a3 = colors[ins->a3];
+                ins->a1 = REMAP(ins->a1);
+                ins->a2 = REMAP(ins->a2);
+                ins->a3 = REMAP(ins->a3);
                 break;
         }
+
+        #undef REMAP
     }
 
     bytecode->register_count = register_count;
