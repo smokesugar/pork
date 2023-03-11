@@ -15,10 +15,11 @@ enum {
     TOKEN_BANG_EQUAL,
 
     TOKEN_RETURN,
-    TOKEN_LET,
     TOKEN_IF,
     TOKEN_ELSE,
     TOKEN_WHILE,
+
+    TOKEN_U64,
 };
 
 typedef struct {
@@ -55,18 +56,36 @@ typedef enum {
     NUM_AST_KINDS,
 } ASTKind;
 
+typedef struct Type Type;
+struct Type {
+    Type* base;
+    int indirection;
+};
+
 typedef struct Variable Variable;
 struct Variable {
     Variable* next;
     Token name;
     i64 reg;
+    Type* type;
 };
+
+#define MAX_TYPE_COUNT 1024
+
+typedef struct {
+    u32 type_count;
+    Type types[MAX_TYPE_COUNT];
+
+    Type* type_void;
+    Type* type_u64;
+} Program;
 
 typedef struct ASTNode ASTNode;
 struct ASTNode {
     ASTKind kind;
     ASTNode* next;
     Token token;
+    Type* type;
 
     union {
         u64 int_literal;

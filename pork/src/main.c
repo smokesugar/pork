@@ -4,6 +4,7 @@
 #include "parse.h"
 #include "bytecode.h"
 #include "set.h"
+#include "semantics.h"
 
 static Arena* scratch_arenas[2];
 
@@ -71,8 +72,12 @@ int main() {
     size_t source_length = fread(source, 1, file_length, file);
     source[source_length] = '\0';
 
-    ASTNode* ast = parse(arena, source);
+    Program program = {0};
+    init_program(&program);
+
+    ASTNode* ast = parse(arena, source, &program);
     if (!ast) return 1;
+    if (!analyze_semantics(arena, source, &program, ast)) return 1;
 
     Bytecode* bytecode = generate_bytecode(arena, ast);
     BasicBlock* cfg = analyze_control_flow(arena, source, bytecode);

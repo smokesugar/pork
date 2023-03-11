@@ -137,9 +137,11 @@
     <ClCompile Include="src\lexer.c" />
     <ClCompile Include="src\main.c" />
     <ClCompile Include="src\parse.c" />
+    <ClCompile Include="src\semantics.c" />
     <ClCompile Include="src\set.c" />
   </ItemGroup>
   <ItemGroup>
+    <ClInclude Include="src\semantics.h" />
     <ClInclude Include="src\base.h" />
     <ClInclude Include="src\bytecode.h" />
     <ClInclude Include="src\error.h" />

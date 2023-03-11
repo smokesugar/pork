@@ -36,6 +36,9 @@
     <ClCompile Include="src\set.c">
       <Filter>Source Files</Filter>
     </ClCompile>
+    <ClCompile Include="src\semantics.c">
+      <Filter>Source Files</Filter>
+    </ClCompile>
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="src\base.h">
@@ -57,6 +60,9 @@
       <Filter>Header Files</Filter>
     </ClInclude>
     <ClInclude Include="src\set.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="src\semantics.h">
       <Filter>Header Files</Filter>
     </ClInclude>
   </ItemGroup>

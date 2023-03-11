@@ -1,4 +1,5 @@
 #include <stdlib.h>
+#include <string.h>
 
 #include "parse.h"
 #include "lexer.h"
@@ -8,6 +9,7 @@ typedef struct {
     char* source;
     Arena* arena;
     Lexer* lexer;
+    Program* program;
 } Parser; 
 
 internal ASTNode* new_node(Parser* parser, ASTKind kind, Token token) {
@@ -177,6 +179,23 @@ internal ASTNode* parse_block(Parser* parser) {
     return block;
 }
 
+/*
+internal bool token_is(Token token, char* string) {
+    return token.length == strlen(string) && memcmp(token.memory, string, token.length) == 0;
+}
+*/
+
+internal Type* find_type(Parser* parser, Token type_name) {
+    assert(parser->program->type_void && "program structure not initialized");
+
+    if (type_name.kind == TOKEN_U64) {
+        return parser->program->type_u64;
+    }
+
+    error_at_token(parser->source, type_name, "unrecognized format");
+    return parser->program->type_void;
+}
+
 internal ASTNode* parse_statement(Parser* parser) {
     Token token = peek_token(parser->lexer);
 
@@ -201,7 +220,8 @@ internal ASTNode* parse_statement(Parser* parser) {
             return ret;
         }
 
-        case TOKEN_LET: {
+        case TOKEN_U64:
+        {
             get_token(parser->lexer);
             Token name = peek_token(parser->lexer);
             CONSUME(TOKEN_IDENTIFIER, "an identifier");
@@ -218,6 +238,8 @@ internal ASTNode* parse_statement(Parser* parser) {
             ASTNode* decl = new_node(parser, AST_VARIABLE_DECL, token);
             decl->name = name;
             decl->next = assign;
+            decl->type = find_type(parser, token);
+
             return decl;
         }
 
@@ -263,150 +285,15 @@ internal ASTNode* parse_statement(Parser* parser) {
     }
 }
 
-typedef struct Scope Scope;
-struct Scope {
-    Scope* parent;
-    Variable* variables;
-};
-
-internal Variable* find_variable(Scope* scope, Token name) {
-    for (Variable* v = scope->variables; v; v = v->next) {
-        if (v->name.length == name.length && memcmp(v->name.memory, name.memory, name.length) == 0) {
-            return v;
-        }
-    }
-
-    if (scope->parent) {
-        return find_variable(scope->parent, name);
-    }
-
-    return 0;
-}
-
-internal bool process_ast(Parser* parser, Scope* scope, ASTNode* node) {
-    static_assert(NUM_AST_KINDS == 17, "not all ast kinds handled");
-    switch (node->kind) {
-        default:
-            assert(false);
-            return false;
-
-        case AST_INT_LITERAL:
-            return true;
-
-        case AST_VARIABLE: {
-            Variable* variable = find_variable(scope, node->name);
-
-            if (!variable) {
-                error_at_token(parser->source, node->token, "undefined variable");
-                return false;
-            }
-
-            node->variable = variable;
-            return true;
-        }
-
-        case AST_ADD:
-        case AST_SUB:
-        case AST_MUL:
-        case AST_DIV:
-        case AST_LESS:
-        case AST_LEQUAL:
-        case AST_EQUAL:
-        case AST_NEQUAL:
-        {
-            bool success = true;
-
-            success &= process_ast(parser, scope, node->left);
-            success &= process_ast(parser, scope, node->right);
-
-            return success;
-        }
-
-        case AST_ASSIGN:
-        {
-            bool success = true;
-
-            success &= process_ast(parser, scope, node->left);
-            success &= process_ast(parser, scope, node->right);
-
-            if (success) {
-                if (node->left->kind != AST_VARIABLE) {
-                    error_at_token(parser->source, node->left->token, "not assignable");
-                    success = false;
-                }
-            }
-
-            return success;
-        }
-
-        case AST_BLOCK: {
-            bool success = true; 
-
-            Scope inner_scope = {
-                .parent = scope,
-            };
-
-            for (ASTNode* child = node->first; child; child = child->next) {
-                success &= process_ast(parser, &inner_scope, child);
-            }
-
-            return success;
-        }
-
-        case AST_RETURN:
-            return process_ast(parser, scope, node->expression);
-
-        case AST_VARIABLE_DECL: {
-            if (find_variable(scope, node->name)) {
-                error_at_token(parser->source, node->name, "variable redefinition");
-                return false;
-            }
-
-            Variable* variable = arena_push_type(parser->arena, Variable);
-            variable->name = node->name;
-
-            Variable** bucket = &scope->variables;
-            while (*bucket) {
-                bucket = &(*bucket)->next;
-            }
-            *bucket = variable;
-
-            node->variable = variable;
-
-            return true;
-        }
-
-        case AST_IF:
-        case AST_WHILE:
-        {
-            bool success = true;
-
-            success &= process_ast(parser, scope, node->conditional.condition);
-            success &= process_ast(parser, scope, node->conditional.block_then);
-
-            if (node->conditional.block_else) {
-                success &= process_ast(parser, scope, node->conditional.block_else);
-            }
-
-            return success;
-        }
-    }
-}
-
-ASTNode* parse(Arena* arena, char* source) {
+ASTNode* parse(Arena* arena, char* source, Program* program) {
     Lexer lexer = init_lexer(source);
 
     Parser parser = {
         .source = source,
         .arena = arena,
-        .lexer = &lexer
+        .lexer = &lexer,
+        .program = program
     };
 
-    ASTNode* ast = parse_block(&parser);
-
-    if (ast) {
-        return process_ast(&parser, 0, ast) ? ast : 0;
-    }
-
-    return 0;
+    return parse_block(&parser);
 }

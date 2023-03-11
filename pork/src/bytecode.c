@@ -479,7 +479,7 @@ struct AdjacencyNode {
     AdjacencyNode* next;
 };
 
-static bool get_interference(u64 width_bits, u8* matrix, i64 a, i64 b) {
+internal bool get_interference(u64 width_bits, u8* matrix, i64 a, i64 b) {
     i64 row = b > a ? b : a;
     i64 column = b > a ? a : b;
     i64 bit_index = row * width_bits + column;
@@ -487,7 +487,7 @@ static bool get_interference(u64 width_bits, u8* matrix, i64 a, i64 b) {
     return value;
 }
 
-static void add_interference(Arena* arena, u64 width_bits, u8* matrix, i64 a, i64 b, AdjacencyNode** adjacency_lists) {
+internal void add_interference(Arena* arena, u64 width_bits, u8* matrix, i64 a, i64 b, AdjacencyNode** adjacency_lists) {
     if (get_interference(width_bits, matrix, a, b)) {
         return;
     }
@@ -511,7 +511,7 @@ static void add_interference(Arena* arena, u64 width_bits, u8* matrix, i64 a, i6
     adjacency_lists[b] = node_b;
 }
 
-static AdjacencyNode** find_edge_pointer(AdjacencyNode** node, i64 var) {
+internal AdjacencyNode** find_edge_pointer(AdjacencyNode** node, i64 var) {
     while (*node) {
         if ((*node)->var == var) {
             return node;
@@ -524,7 +524,7 @@ static AdjacencyNode** find_edge_pointer(AdjacencyNode** node, i64 var) {
     return 0;
 }
 
-static void remove_interference(u64 width_bits, u8* matrix, i64 a, i64 b, AdjacencyNode** adjacency_lists) {
+internal void remove_interference(u64 width_bits, u8* matrix, i64 a, i64 b, AdjacencyNode** adjacency_lists) {
     assert(get_interference(width_bits, matrix, a, b));
 
     i64 row = b > a ? b : a;
@@ -540,11 +540,11 @@ static void remove_interference(u64 width_bits, u8* matrix, i64 a, i64 b, Adjace
     *node_b = (*node_b)->next;
 }
 
-static AdjacencyNode* find_edge(AdjacencyNode* list, i64 var) {
+internal AdjacencyNode* find_edge(AdjacencyNode* list, i64 var) {
     return *find_edge_pointer(&list, var);
 }
 
-static u32 count_active_interferences(AdjacencyNode* list) {
+internal u32 count_active_interferences(AdjacencyNode* list) {
     u32 count = 0;
     while (list) {
         if (list->active) {
@@ -555,7 +555,7 @@ static u32 count_active_interferences(AdjacencyNode* list) {
     return count;
 }
 
-static i64 get_lr(i64* mapping, i64 reg) {
+internal i64 get_lr(i64* mapping, i64 reg) {
     if (mapping[reg] == reg) {
         return reg;
     }

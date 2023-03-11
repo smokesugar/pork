@@ -2,4 +2,4 @@
 
 #include "types.h"
 
-ASTNode* parse(Arena* arena, char* source);
+ASTNode* parse(Arena* arena, char* source, Program* program);

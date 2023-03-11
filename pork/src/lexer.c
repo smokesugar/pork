@@ -28,8 +28,8 @@ internal int identifier_kind(char* start, char* pointer) {
     switch(start[0]) {
         case 'r':
             return check_keyword(start, pointer, "return", TOKEN_RETURN);
-        case 'l':
-            return check_keyword(start, pointer, "let", TOKEN_LET);
+        case 'u':
+            return check_keyword(start, pointer, "u64", TOKEN_U64);
         case 'i':
             return check_keyword(start, pointer, "if", TOKEN_IF);
         case 'e':
