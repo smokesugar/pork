@@ -5,8 +5,7 @@
 #include "bytecode.h"
 #include "set.h"
 #include "semantics.h"
-
-#define VM_REGISTER_COUNT 8
+#include "vm.h"
 
 static Arena* scratch_arenas[2];
 
@@ -60,85 +59,23 @@ int main() {
     init_program(&program);
 
     ASTFunction* ast_function = parse(arena, source, &program);
-    if (!ast_function) return 1;
-    if (!analyze_semantics(arena, source, &program, ast_function)) return 1;
+    if (!ast_function)
+        return 1;
+
+    if (!analyze_semantics(arena, source, &program, ast_function))
+        return 1;
 
     Bytecode* bytecode = generate_bytecode(arena, ast_function);
+
     BasicBlock* cfg = analyze_control_flow(arena, source, bytecode);
     if (!cfg) return 1;
+
     analyze_data_flow(cfg, bytecode);
 
-    allocate_registers(cfg, bytecode, VM_REGISTER_COUNT);
-    i64 regs[VM_REGISTER_COUNT] = {0};
+    allocate_registers(cfg, bytecode, 8);
 
-    for (int i = 0; i < bytecode->length;)
-    {
-        Instruction* ins = bytecode->instructions + i;
+    i64 result = vm_execute(bytecode);
+    printf("Result: %lld\n", result);
 
-        static_assert(NUM_OPS == 16, "not all ops handled");
-        switch (ins->op) {
-            default:
-                assert(false);
-                break;
-
-            case OP_NOOP:
-                break;
-
-            case OP_IMM:
-                regs[ins->a1] = ins->a2;
-                break;
-            case OP_COPY:
-                regs[ins->a1] = regs[ins->a2];
-                break;
-            case OP_CAST:
-                regs[ins->a1] = regs[ins->a2];
-                break;
-
-            case OP_ADD:
-                regs[ins->a1] = regs[ins->a2] + regs[ins->a3];
-                break;
-            case OP_SUB:
-                regs[ins->a1] = regs[ins->a2] - regs[ins->a3];
-                break;
-            case OP_MUL:
-                regs[ins->a1] = regs[ins->a2] * regs[ins->a3];
-                break;
-            case OP_DIV:
-                regs[ins->a1] = regs[ins->a2] / regs[ins->a3];
-                break;
-            case OP_LESS:
-                regs[ins->a1] = regs[ins->a2] < regs[ins->a3];
-                break;
-            case OP_LEQUAL:
-                regs[ins->a1] = regs[ins->a2] <= regs[ins->a3];
-                break;
-            case OP_EQUAL:
-                regs[ins->a1] = regs[ins->a2] == regs[ins->a3];
-                break;
-            case OP_NEQUAL:
-                regs[ins->a1] = regs[ins->a2] != regs[ins->a3];
-                break;
-
-            case OP_RET:
-                printf("Returned with %lld.\n", regs[ins->a1]);
-                return 0;
-
-            case OP_JMP: {
-                i64 label = ins->a1;
-                i = bytecode->label_locations[label];
-                continue;
-            }
-
-            case OP_CJMP: {
-                i64 label = regs[ins->a1] ? ins->a2 : ins->a3;
-                i = bytecode->label_locations[label];
-                continue;
-            }
-        }
-
-        ++i;
-    }
-
-    printf("No return.\n");
     return 1;
 }
