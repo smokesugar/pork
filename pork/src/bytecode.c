@@ -9,14 +9,18 @@ typedef struct {
     Bytecode* bytecode;
     int label_count;
     int label_locations[MAX_LABELS];
+    Program* program;
 } Translator;
 
-internal void emit(Translator* translator, Op op, i64 a1, i64 a2, i64 a3, int line) {
+internal void emit(Translator* translator, Op op, Type* type, i64 a1, i64 a2, i64 a3, int line) {
     assert(translator->bytecode->length < MAX_INSTRUCTION_COUNT);
     assert(op);
 
+    OpType op_type = type ? type->op_type : OP_TYPE_NONE;
+
     Instruction* ins = translator->bytecode->instructions + (translator->bytecode->length++);
     ins->op = op;
+    ins->type = op_type;
     ins->a1 = a1;
     ins->a2 = a2;
     ins->a3 = a3;
@@ -39,7 +43,7 @@ internal void place_label(Translator* translator, int label) {
 }
 
 internal i64 translate(Translator* translator, ASTNode* node) {
-    static_assert(NUM_AST_KINDS == 17, "not all ast kinds handled");
+    static_assert(NUM_AST_KINDS == 18, "not all ast kinds handled");
     switch (node->kind)
     {
         default:
@@ -48,12 +52,19 @@ internal i64 translate(Translator* translator, ASTNode* node) {
 
         case AST_INT_LITERAL: {
             i64 result = get_reg(translator);
-            emit(translator, OP_IMM, result, node->int_literal, 0, node->token.line);
+            emit(translator, OP_IMM, node->type, result, node->int_literal, 0, node->token.line);
             return result;
         }
 
         case AST_VARIABLE: {
             return node->variable->reg;
+        }
+
+        case AST_CAST: {
+            i64 input = translate(translator, node->expression);
+            i64 result = get_reg(translator);
+            emit(translator, OP_CAST, node->type, result, input, node->expression->type->op_type, node->token.line);
+            return result;
         }
 
         case AST_ADD:
@@ -101,13 +112,13 @@ internal i64 translate(Translator* translator, ASTNode* node) {
                     break;
             }
 
-            emit(translator, op, result, left, right, node->token.line);
+            emit(translator, op, node->type, result, left, right, node->token.line);
             return result;
         }
 
         case AST_ASSIGN: {
             i64 result = translate(translator, node->right);
-            emit(translator, OP_COPY, node->left->variable->reg, result, 0, node->token.line);
+            emit(translator, OP_COPY, node->type, node->left->variable->reg, result, 0, node->token.line);
             return result;
         }
 
@@ -119,7 +130,7 @@ internal i64 translate(Translator* translator, ASTNode* node) {
             
         case AST_RETURN: {
             i64 result = translate(translator, node->expression);
-            emit(translator, OP_RET, result, 0, 0, node->token.line);
+            emit(translator, OP_RET, node->type, result, 0, 0, node->token.line);
             return -1;
         }
 
@@ -136,14 +147,14 @@ internal i64 translate(Translator* translator, ASTNode* node) {
             int label_end = 0;
 
             i64 condition = translate(translator, node->conditional.condition);
-            emit(translator, OP_CJMP, condition, label_then, label_else, INT32_MAX);
+            emit(translator, OP_CJMP, 0, condition, label_then, label_else, INT32_MAX);
 
             place_label(translator, label_then);
             translate(translator, node->conditional.block_then);
 
             if (has_else) {
                 label_end = get_label(translator);
-                emit(translator, OP_JMP, label_end, 0, 0, INT32_MAX);
+                emit(translator, OP_JMP, 0, label_end, 0, 0, INT32_MAX);
             }
 
             place_label(translator, label_else);
@@ -163,11 +174,11 @@ internal i64 translate(Translator* translator, ASTNode* node) {
 
             place_label(translator, label_start);
             i64 condition = translate(translator, node->conditional.condition);
-            emit(translator, OP_CJMP, condition, label_body, label_end, INT32_MAX);
+            emit(translator, OP_CJMP, 0, condition, label_body, label_end, INT32_MAX);
 
             place_label(translator, label_body);
             translate(translator, node->conditional.block_then);
-            emit(translator, OP_JMP, label_start, 0, 0, INT32_MAX);
+            emit(translator, OP_JMP, 0, label_start, 0, 0, INT32_MAX);
 
             place_label(translator, label_end);
 
@@ -176,14 +187,14 @@ internal i64 translate(Translator* translator, ASTNode* node) {
     }
 }
 
-Bytecode* generate_bytecode(Arena* arena, ASTNode* ast) {
+Bytecode* generate_bytecode(Arena* arena, ASTFunction* ast_function) {
     Bytecode* bytecode = arena_push_type(arena, Bytecode);
 
     Translator translator = {
         .bytecode = bytecode
     };
 
-    translate(&translator, ast);
+    translate(&translator, ast_function->body);
 
     // Remap labels to remove duplicates
 
@@ -387,7 +398,7 @@ void analyze_data_flow(BasicBlock* graph, Bytecode* bytecode) {
                     if (!set_has(&b->var_kill, ins->ai)) \
                         set_insert(&b->ue_var, ins->ai);
 
-            static_assert(NUM_OPS == 15, "not all ops handled");
+            static_assert(NUM_OPS == 16, "not all ops handled");
             switch (ins->op)
             {
                 default:
@@ -403,6 +414,7 @@ void analyze_data_flow(BasicBlock* graph, Bytecode* bytecode) {
                     break;
 
                 case OP_COPY: // Define a1, use a2
+                case OP_CAST:
                     USES(a2);
                     DEFINES(a1);
                     break;
@@ -618,7 +630,7 @@ void allocate_registers(BasicBlock* graph, Bytecode* bytecode, u32 register_coun
             for (int i = b->end-1; i >= b->start; --i) {
                 Instruction* ins = bytecode->instructions + i;
 
-                static_assert(NUM_OPS == 15, "not all ops handled");
+                static_assert(NUM_OPS == 16, "not all ops handled");
                 switch (ins->op)
                 {
                     default:
@@ -635,7 +647,13 @@ void allocate_registers(BasicBlock* graph, Bytecode* bytecode, u32 register_coun
 
                     case OP_COPY: // Copies require special treatement as they can be coalesced.
                         DEFINES(a1, true);
+                        USES(a2);
                         copy_instructions[copy_instruction_count++] = ins;
+                        break;
+                       
+                    case OP_CAST:
+                        DEFINES(a1, false);
+                        USES(a2);
                         break;
 
                     case OP_ADD:
@@ -766,7 +784,7 @@ void allocate_registers(BasicBlock* graph, Bytecode* bytecode, u32 register_coun
 
         #define REMAP(var) colors[get_lr(lrs, var)]
         
-        static_assert(NUM_OPS == 15, "not all ops handled");
+        static_assert(NUM_OPS == 16, "not all ops handled");
         switch (ins->op)
         {
             default:
@@ -784,6 +802,7 @@ void allocate_registers(BasicBlock* graph, Bytecode* bytecode, u32 register_coun
                 break;
 
             case OP_COPY:
+            case OP_CAST:
                 ins->a1 = REMAP(ins->a1);
                 ins->a2 = REMAP(ins->a2);
                 break;

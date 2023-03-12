@@ -1,16 +1,17 @@
 {
-    u64 bruh = 0;
-    u64 twenty = 10 + 5 * 2;
+    i16 bruh = 0;
+    i8 ten = 10;
+    i16 twenty = ten + 5 * 2;
 
     while bruh < twenty {
         bruh = bruh + 1;
     }
 
-    u64 chungus = 0;
-    u64 result;
+    i16 chungus = 0;
+    i16 result;
 
     if 1 {
-        u64 bruh2 = bruh + 1;
+        i16 bruh2 = bruh + 1;
         result = bruh * bruh2;
     }
     else {

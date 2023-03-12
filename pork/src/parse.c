@@ -12,11 +12,15 @@ typedef struct {
     Program* program;
 } Parser; 
 
-internal ASTNode* new_node(Parser* parser, ASTKind kind, Token token) {
-    ASTNode* node = arena_push_type(parser->arena, ASTNode);
+ASTNode* new_ast_node(Arena* arena, ASTKind kind, Token token) {
+    ASTNode* node = arena_push_type(arena, ASTNode);
     node->kind = kind;
     node->token = token;
     return node;
+}
+
+internal ASTNode* new_node(Parser* parser, ASTKind kind, Token token) {
+    return new_ast_node(parser->arena, kind, token);
 }
 
 internal bool match(Parser* parser, int kind, char* description) {
@@ -188,11 +192,27 @@ internal bool token_is(Token token, char* string) {
 internal Type* find_type(Parser* parser, Token type_name) {
     assert(parser->program->type_void && "program structure not initialized");
 
-    if (type_name.kind == TOKEN_U64) {
-        return parser->program->type_u64;
+    switch (type_name.kind) {
+        case TOKEN_U64:
+            return parser->program->type_u64;
+        case TOKEN_U32:
+            return parser->program->type_u32;
+        case TOKEN_U16:
+            return parser->program->type_u16;
+        case TOKEN_U8:
+            return parser->program->type_u8;
+
+        case TOKEN_I64:
+            return parser->program->type_i64;
+        case TOKEN_I32:
+            return parser->program->type_i32;
+        case TOKEN_I16:
+            return parser->program->type_i16;
+        case TOKEN_I8:
+            return parser->program->type_i8;
     }
 
-    error_at_token(parser->source, type_name, "unrecognized format");
+    error_at_token(parser->source, type_name, "unrecognized type");
     return parser->program->type_void;
 }
 
@@ -221,6 +241,13 @@ internal ASTNode* parse_statement(Parser* parser) {
         }
 
         case TOKEN_U64:
+        case TOKEN_U32:
+        case TOKEN_U16:
+        case TOKEN_U8:
+        case TOKEN_I64:
+        case TOKEN_I32:
+        case TOKEN_I16:
+        case TOKEN_I8:
         {
             get_token(parser->lexer);
             Token name = peek_token(parser->lexer);
@@ -285,7 +312,7 @@ internal ASTNode* parse_statement(Parser* parser) {
     }
 }
 
-ASTNode* parse(Arena* arena, char* source, Program* program) {
+ASTFunction* parse(Arena* arena, char* source, Program* program) {
     Lexer lexer = init_lexer(source);
 
     Parser parser = {
@@ -295,5 +322,11 @@ ASTNode* parse(Arena* arena, char* source, Program* program) {
         .program = program
     };
 
-    return parse_block(&parser);
+    ASTNode* body = parse_block(&parser);
+    if (!body) return 0;
+
+    ASTFunction* function = arena_push_type(arena, ASTFunction);
+    function->body = body;
+
+    return function;
 }

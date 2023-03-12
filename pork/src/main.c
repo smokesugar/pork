@@ -6,7 +6,7 @@
 #include "set.h"
 #include "semantics.h"
 
-#define VM_REGISTER_COUNT 4
+#define VM_REGISTER_COUNT 8
 
 static Arena* scratch_arenas[2];
 
@@ -77,11 +77,11 @@ int main() {
     Program program = {0};
     init_program(&program);
 
-    ASTNode* ast = parse(arena, source, &program);
-    if (!ast) return 1;
-    if (!analyze_semantics(arena, source, &program, ast)) return 1;
+    ASTFunction* ast_function = parse(arena, source, &program);
+    if (!ast_function) return 1;
+    if (!analyze_semantics(arena, source, &program, ast_function)) return 1;
 
-    Bytecode* bytecode = generate_bytecode(arena, ast);
+    Bytecode* bytecode = generate_bytecode(arena, ast_function);
     BasicBlock* cfg = analyze_control_flow(arena, source, bytecode);
     if (!cfg) return 1;
     analyze_data_flow(cfg, bytecode);
@@ -93,7 +93,7 @@ int main() {
     {
         Instruction* ins = bytecode->instructions + i;
 
-        static_assert(NUM_OPS == 15, "not all ops handled");
+        static_assert(NUM_OPS == 16, "not all ops handled");
         switch (ins->op) {
             default:
                 assert(false);
@@ -106,6 +106,9 @@ int main() {
                 regs[ins->a1] = ins->a2;
                 break;
             case OP_COPY:
+                regs[ins->a1] = regs[ins->a2];
+                break;
+            case OP_CAST:
                 regs[ins->a1] = regs[ins->a2];
                 break;
 

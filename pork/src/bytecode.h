@@ -2,7 +2,7 @@
 
 #include "types.h"
 
-Bytecode* generate_bytecode(Arena* arena, ASTNode* ast);
+Bytecode* generate_bytecode(Arena* arena, ASTFunction* ast_function);
 
 BasicBlock* analyze_control_flow(Arena* arena, char* source, Bytecode* bytecode);
 

@@ -29,9 +29,31 @@ internal int identifier_kind(char* start, char* pointer) {
         case 'r':
             return check_keyword(start, pointer, "return", TOKEN_RETURN);
         case 'u':
-            return check_keyword(start, pointer, "u64", TOKEN_U64);
+            switch (start[1]) {
+                case '6':
+                    return check_keyword(start, pointer, "u64", TOKEN_U64);
+                case '3':
+                    return check_keyword(start, pointer, "u32", TOKEN_U32);
+                case '1':
+                    return check_keyword(start, pointer, "u16", TOKEN_U16);
+                case '8':
+                    return check_keyword(start, pointer, "u8", TOKEN_U8);
+            }
+            break;
         case 'i':
-            return check_keyword(start, pointer, "if", TOKEN_IF);
+            switch (start[1]) {
+                case 'f':
+                    return check_keyword(start, pointer, "if", TOKEN_IF);
+                case '6':
+                    return check_keyword(start, pointer, "i64", TOKEN_I64);
+                case '3':
+                    return check_keyword(start, pointer, "i32", TOKEN_I32);
+                case '1':
+                    return check_keyword(start, pointer, "i16", TOKEN_I16);
+                case '8':
+                    return check_keyword(start, pointer, "i8", TOKEN_I8);
+            }
+            break;
         case 'e':
             return check_keyword(start, pointer, "else", TOKEN_ELSE);
         case 'w':
