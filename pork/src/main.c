@@ -33,24 +33,6 @@ void release_scratch(Scratch* scratch) {
     scratch->arena->allocated = scratch->allocated;
 }
 
-internal i64 eval(ASTNode* node) {
-    switch (node->kind) {
-        default:
-            assert(false);
-            return 0;
-        case AST_INT_LITERAL:
-            return node->int_literal;
-        case AST_ADD:
-            return eval(node->left) + eval(node->right);
-        case AST_SUB:
-            return eval(node->left) - eval(node->right);
-        case AST_MUL:
-            return eval(node->left) * eval(node->right);
-        case AST_DIV:
-            return eval(node->left) / eval(node->right);
-    }
-}
-
 int main() {
     for (int i = 0; i < LENGTH(scratch_arenas); ++i) {
         scratch_arenas[i] = new_arena(5 * 1024 * 1024);

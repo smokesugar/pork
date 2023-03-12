@@ -6,7 +6,7 @@
 
  - [x] Tasty
  - [x] Bytecode VM execution
- - [x]  Global Register Allocation
+ - [x] Global Register Allocation
  - [x] Some static analysis
  - [ ] Optimized bytecode
  - [ ] x86-64 Output
