@@ -1,8 +1,6 @@
 # Pork
 
-Pork is a compiled language.
-
-what the hell.
+"Spilling isn't implemented, please use less variables and try again".
 
 ## Features
 
